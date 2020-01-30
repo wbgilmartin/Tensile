@@ -29,6 +29,8 @@ from shutil import copy as shutil_copy
 from shutil import rmtree
 
 from .Contractions import FreeIndex
+from .DataType import DataType
+
 
 
 ################################################################################
@@ -441,6 +443,65 @@ def problemSizeParams(solution, problemSize):
 
     return rv
 
+def problemSizeParams2(problemType, problemSize):
+
+    numIndices = len(problemType.indices)
+    rv = []
+
+    astrides = [-1] * problemType.aDims
+    for sc in problemType.setConstStrideA:
+        index = problemType.indices[sc[0]]
+        if type(index) == FreeIndex:
+            assert(index.isA)
+            astrides[index.i] = sc[1]
+        else:
+            astrides[index.a] = sc[1]
+
+    bstrides = [-1] * problemType.bDims
+    for sc in problemType.setConstStrideB:
+        index = problemType.indices[sc[0]]
+        if type(index) == FreeIndex:
+            assert(not index.isA)
+            bstrides[index.i] = sc[1]
+        else:
+            bstrides[index.b] = sc[1]
+
+    if len(problemSize) == numIndices:
+      None
+    elif len(problemSize) == numIndices + 4:
+        if astrides[1] == -1:
+          astrides[1] = problemSize[numIndices+2]
+        else:
+          raise RuntimeError("problem-specified lda(%u) conflicts with setConstStrideA(%u)" % \
+              (astrides[1], problemSize[numIndices+2]))
+
+        if bstrides[1] == -1:
+          bstrides[1] = problemSize[numIndices+3]
+        else:
+          raise RuntimeError("problem-specified ldb(%u) conflicts with setConstStrideB(%u)" % \
+              (bstrides[1], problemSize[numIndices+3]))
+
+        rv.append(('d-strides', "-1," + str(problemSize[numIndices+1])))
+        rv.append(('c-strides', "-1," + str(problemSize[numIndices+0])))
+    else:
+        raise RuntimeError(
+            "Invalid number of problem type indices: {0} - Indices: {1}, problemSize: {2}".format(len(problemSize), numIndices,
+            ', '.join(map(str, problemSize))))
+
+    if problemType.convolution:
+        (problemSize, astrides) = normalizeConvolution(problemType.convolution, list(problemSize), astrides)
+    problemSizeArg = ('problem-size', ','.join(map(str, problemSize[:numIndices])))
+    rv.insert(0, problemSizeArg)
+
+    rv.append(('a-strides', ",".join(map(str, astrides))))
+    rv.append(('b-strides', ",".join(map(str, bstrides))))
+
+    if len(problemType.zeroPadA):
+        rv.append(('a-zero-pads', '; '.join([','.join(map(str,zp)) for zp in problemType.zeroPadA])))
+    if len(problemType.zeroPadB):
+        rv.append(('b-zero-pads', '; '.join([','.join(map(str,zp)) for zp in problemType.zeroPadB])))
+
+    return rv
 
 def dataInitName(num):
     if num == 0: return 'Zero'
@@ -479,45 +540,49 @@ def dataInitParams(problemType):
             ('init-alpha', dataInitName(initAlpha)),
             ('init-beta',  dataInitName(initBeta))]
 
-def writeClientConfig(forBenchmark, solutions, problemSizes, stepName, stepBaseDir, newLibrary, codeObjectFiles):
+#def writeClientConfig(forBenchmark, solutions, problemSizes, stepName, stepBaseDir, newLibrary, codeObjectFiles):
+def writeClientConfig(forBenchmark, problemSizes, problemType, codeObjectFiles, resultsFileName, parametersFilePath):
 
-    filename = os.path.join(globalParameters["WorkingPath"], "ClientParameters.ini")
-    with open(filename, "w") as f:
+
+    #filename = os.path.join(globalParameters["WorkingPath"], "ClientParameters.ini")
+    libraryDir, _ = os.path.split(codeObjectFiles[0])
+    libraryFile = os.path.join(libraryDir, "TensileLibrary.yaml")
+    with open(parametersFilePath, "w") as f:
         def param(key, value):
             f.write("{}={}\n".format(key, value))
 
-        sourceDir = os.path.join(stepBaseDir, "source")
-        libraryFile = os.path.join(sourceDir, "library", "TensileLibrary.yaml")
+        #sourceDir = os.path.join(stepBaseDir, "source")
+        #libraryFile = os.path.join(sourceDir, "library", "TensileLibrary.yaml")
         param("library-file", libraryFile)
         for coFile in codeObjectFiles:
-            param("code-object", os.path.join(sourceDir,coFile))
+            param("code-object", os.path.join(coFile,coFile))
 
-        if globalParameters["NewClient"] == 1:
-          param('results-file', os.path.join(stepBaseDir, "../Data", stepName+"-new.csv"))
-        else:
-          param('results-file', os.path.join(stepBaseDir, "../Data", stepName+".csv"))
+        #if globalParameters["NewClient"] == 1:
+        #  param('results-file', os.path.join(stepBaseDir, "../Data", stepName+"-new.csv"))
+        #else:
+        #  param('results-file', os.path.join(stepBaseDir, "../Data", stepName+".csv"))
+        param('results-file', resultsFileName)
+        #newSolution = next(iter(newLibrary.solutions.values()))
+        if problemType.convolution:
+            param('convolution-identifier', problemType.convolution.identifier())
+        param('problem-identifier', problemType.operationIdentifier)
+        param('a-type',     problemType.aType.toEnum())
+        param('b-type',     problemType.bType.toEnum())
+        param('c-type',     problemType.cType.toEnum())
+        param('d-type',     problemType.dType.toEnum())
+        param('alpha-type', problemType.alphaType.toEnum())
+        param('beta-type',  problemType.betaType.toEnum())
 
-        newSolution = next(iter(newLibrary.solutions.values()))
-        if newSolution.problemType.convolution:
-            param('convolution-identifier', newSolution.problemType.convolution.identifier())
-        param('problem-identifier', newSolution.problemType.operationIdentifier)
-        param('a-type',     newSolution.problemType.aType.toEnum())
-        param('b-type',     newSolution.problemType.bType.toEnum())
-        param('c-type',     newSolution.problemType.cType.toEnum())
-        param('d-type',     newSolution.problemType.dType.toEnum())
-        param('alpha-type', newSolution.problemType.alphaType.toEnum())
-        param('beta-type',  newSolution.problemType.betaType.toEnum())
-
-        param('high-precision-accumulate',  newSolution.problemType.highPrecisionAccumulate)
+        param('high-precision-accumulate',  problemType.highPrecisionAccumulate)
 
         for problemSize in problemSizes.sizes:
-            for key,value in problemSizeParams(newSolution, problemSize):
+            for key,value in problemSizeParams2(problemType, problemSize):
                 param(key,value)
             #param('problem-size', ','.join(map(str,problemSize)))
 
         param("device-idx",               globalParameters["Device"])
 
-        for key,value in dataInitParams(newSolution.problemType):
+        for key,value in dataInitParams(problemType):
             param(key, value)
 
         param("c-equal-d",                globalParameters["CEqualD"])
@@ -544,7 +609,7 @@ def writeClientConfig(forBenchmark, solutions, problemSizes, stepName, stepBaseD
         param("num-syncs-per-benchmark",  globalParameters["SyncsPerBenchmark"])
         param("use-gpu-timer",            globalParameters["KernelTime"])
         if globalParameters["ConvolutionVsContraction"]:
-            assert(newSolution.problemType.convolution)
+            assert(problemType.convolution)
             param("convolution-vs-contraction", globalParameters["ConvolutionVsContraction"])
         if not globalParameters["KernelTime"]:
             param("num-warmups", 1)
@@ -630,9 +695,6 @@ def writeClientParameters(forBenchmark, solutions, problemSizes, stepName, \
   ##############################################################################
   # Problem Types
   ##############################################################################
-  #dataTypes = []
-  #problemTypes = []
-  #functionSerialToDataTypeAndIdx = []
   dataTypes = []
   problemTypes = []
   destDataTypes = {}
