@@ -521,7 +521,13 @@ def writeBenchmarkFiles(stepBaseDir, solutions, problemSizes, stepName, filesToC
 
   codeObjectFiles = [os.path.relpath(f, globalParameters["WorkingPath"]) for f in codeObjectFiles]
 
-  writeClientConfig(True, solutions, problemSizes, stepName, stepBaseDir, newLibrary, codeObjectFiles)
+  #writeClientConfig(True, solutions, problemSizes, stepName, stepBaseDir, newLibrary, codeObjectFiles)
+  stepSourceDirectory = os.path.join(stepBaseDir,"source")
+  codeObjectFiles = [os.path.join(stepSourceDirectory, f) for f in codeObjectFiles]
+  resutlsFilePath = os.path.join(stepBaseDir, "../Data", stepName+"-new.csv")
+  configPath = os.path.join(globalParameters["WorkingPath"], "ClientParameters.ini")
+  theSolution = next(iter(newLibrary.solutions.values()))
+  writeClientConfig(True, problemSizes, theSolution.problemType, codeObjectFiles, resutlsFilePath, configPath)
 
   if len(solutions) == 0:
     printExit("write solutions and kernels results 0 valid soultion.")
@@ -561,7 +567,7 @@ class FrozenDictionary:
   def __str__(self):
     return Solution.getNameFull(self.parameters)
   def __repr__(self):
-    return self.__str__();
+    return self.__str__()
 
 
 ################################################################################

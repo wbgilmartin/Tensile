@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+
+
+
+try:
+    from Tensile.TensileCreateClientLibrary import TensileCreateClientLibrary
+except ImportError:
+    import os.path
+    import sys
+    parentdir = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", ".."))
+    sys.path.append(parentdir)
+
+    from Tensile.TensileCreateClientLibrary import TensileCreateClientLibrary
+
+################################################################################
+# Main
+################################################################################
+if __name__ == "__main__":
+    TensileCreateClientLibrary(sys.argv[1:])
