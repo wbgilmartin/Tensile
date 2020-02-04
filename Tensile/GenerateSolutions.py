@@ -65,18 +65,18 @@ def GenerateSolutions(userArgs):
 
 
     #ttSides = [1,2,3,4,5,6]
-    #ttSides = [4,8]
-    ttSides = [8]
+    ttSides = [2,4,8]
+    #ttSides = [8]
     tt = []
     for i in ttSides:
       for j in ttSides:
         tt.append([i, j])
 
-    #wgSides = [8,16]
-    #wg = []
-    #for i in wgSides:
-    #  for j in wgSides:
-    #      wg.append([i,j,1])
+    wgSides = [8,16]
+    wg = []
+    for i in wgSides:
+      for j in wgSides:
+          wg.append([i,j,1])
     wg = [[16,16,1]]
     forkParameters.append({"ThreadTile": tt})
     forkParameters.append({"WorkGroup": wg})
@@ -102,15 +102,15 @@ def GenerateSolutions(userArgs):
 
     sourcePath = ensurePath(os.path.join(effectiveWorkingPath, "source"))
     solutionsPath = ensurePath(os.path.join(effectiveWorkingPath, "solutions"))
-    libraryPath = ensurePath(os.path.join(sourcePath, "library"))
-    dataPath = ensurePath(os.path.join(effectiveWorkingPath, "data"))
-    configFilePath = ensurePath(os.path.join(effectiveWorkingPath, "configs"))
-    scriptPath = ensurePath(os.path.join(effectiveWorkingPath, "script"))
+    #libraryPath = ensurePath(os.path.join(sourcePath, "library"))
+    #dataPath = ensurePath(os.path.join(effectiveWorkingPath, "data"))
+    #configFilePath = ensurePath(os.path.join(effectiveWorkingPath, "configs"))
+    #scriptPath = ensurePath(os.path.join(effectiveWorkingPath, "script"))
     clientBuildDir = ensurePath(os.path.join(effectiveWorkingPath, "client"))
-    resultsPath = ensurePath(os.path.join(effectiveWorkingPath, "results"))
+    #resultsPath = ensurePath(os.path.join(effectiveWorkingPath, "results"))
 
-    dataFilePath = os.path.join(dataPath, "benchmark.csv")
-    configFile = os.path.join(configFilePath, "ClientParameters.ini")
+    #dataFilePath = os.path.join(dataPath, "benchmark.csv")
+    #configFile = os.path.join(configFilePath, "ClientParameters.ini")
     solutionsFilePath = os.path.join(solutionsPath, "solutions.yaml")
 
     ClientExecutable.getClientExecutable(clientBuildDir)
@@ -118,47 +118,51 @@ def GenerateSolutions(userArgs):
     problemSizeGroupConfigs = [{"BenchmarkCommonParameters": benchmarkCommonParameters, "ForkParameters": forkParameters}]
     hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, problemSizeGroupConfigs)
 
+    print ("number of possable solutions: %u" % len(hardcodedParametersSets))
     solutionsList = generateSolutions (problemTypeConfig, hardcodedParametersSets, initialSolutionParameters)
+
+    print ("actual number of solutions: %u" % len(solutionsList))
 
     WriteClientLibraryFromSolutions(solutionsList, globalSourcePath, sourcePath)
 
     problemTypeDict = solutionsList[0]["ProblemType"].state
 
-    sizes = [
-        {"Exact": [784, 512, 1, 128]}, \
-        {"Exact": [784, 128, 1, 512]}, \
-        {"Exact": [196, 1024, 64, 256]}, \
-        {"Exact": [196, 256, 64, 1024]}
-    ]
+    #sizes = [
+    #    {"Exact": [784, 512, 1, 128]}, \
+    #    {"Exact": [784, 128, 1, 512]}, \
+    #    {"Exact": [196, 1024, 64, 256]}, \
+    #    {"Exact": [196, 256, 64, 1024]}
+    #]
 
-    problemSizes = ProblemSizes(problemTypeDict, sizes)
+    #problemSizes = ProblemSizes(problemTypeDict, sizes)
+    problemSizes = ProblemSizes(problemTypeDict, None)
     YAMLIO.writeSolutions(solutionsFilePath, problemSizes, [solutionsList])
 
-    CreateBenchmarkClientPrametersForSizes(libraryPath, problemSizes, dataFilePath, configFile)
+    #CreateBenchmarkClientPrametersForSizes(libraryPath, problemSizes, dataFilePath, configFile)
 
-    returncode = runNewClient(scriptPath, configFile, clientBuildDir)
-    print2(returncode)
+    #returncode = runNewClient(scriptPath, configFile, clientBuildDir)
+    #print2(returncode)
 
-    problemTypeObj = ProblemType(problemTypeConfig)
-    problemTypeName = str(problemTypeObj)
+    #problemTypeObj = ProblemType(problemTypeConfig)
+    #problemTypeName = str(problemTypeObj)
 
-    resultsDataFile = os.path.join(resultsPath, problemTypeName + ".csv")
-    resultsSolutionsFile = os.path.join(resultsPath, problemTypeName + ".yaml")
+    #resultsDataFile = os.path.join(resultsPath, problemTypeName + ".csv")
+    #resultsSolutionsFile = os.path.join(resultsPath, problemTypeName + ".yaml")
 
-    shutil.copyfile(dataFilePath, resultsDataFile)
-    shutil.copyfile(solutionsFilePath, resultsSolutionsFile)
+    #shutil.copyfile(dataFilePath, resultsDataFile)
+    #shutil.copyfile(solutionsFilePath, resultsSolutionsFile)
 
-    globalParameters["BenchmarkDataPath"] = "results"
-    globalParameters["LibraryLogicPath"] = "logic"
-    globalParameters["WorkingPath"] = effectiveWorkingPath
+    #globalParameters["BenchmarkDataPath"] = "results"
+    #globalParameters["LibraryLogicPath"] = "logic"
+    #globalParameters["WorkingPath"] = effectiveWorkingPath
 
-    libraryLogic = { \
-        "ArchitectureName": "gfx906", \
-        "DeviceNames": ["Device 66a0", "Device 66a1", "Device 66a7", "Vega 20"], \
-        "ScheduleName": "vega20" \
-    }
+    #libraryLogic = { \
+    #    "ArchitectureName": "gfx906", \
+    #    "DeviceNames": ["Device 66a0", "Device 66a1", "Device 66a7", "Vega 20"], \
+    #    "ScheduleName": "vega20" \
+    #}
 
-    LibraryLogic.main(libraryLogic)
+    #LibraryLogic.main(libraryLogic)
 
     print ("done")
     #print (returncode)
