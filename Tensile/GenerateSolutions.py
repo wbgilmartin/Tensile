@@ -60,9 +60,16 @@ def buildSolution(problemTypeConfig, benchmarkCommonParameters, forkParameters, 
 
   return solutionsList 
 
+def getProblemTypeConfigs():
+  problemTypeConfigs = [ 
+    {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": False, "TransposeB": False, "UseBeta": True}, \
+    {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": False, "TransposeB": True, "UseBeta": True}, \
+    {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": True, "TransposeB": False, "UseBeta": True} 
+  ]
+  return problemTypeConfigs
+
 def generateConfigs():
-  problemTypeConfig = {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": False, "TransposeB": False,
-    "UseBeta": True}
+  problemTypeConfigs = getProblemTypeConfigs()
 
   benchmarkCommonParameters = [{"LoopTail": [True]}, {"KernelLanguage": ["Assembly"]}, \
         {"EdgeType": ["ShiftPtr"]}, {"GlobalSplitU": [1] } ]
@@ -78,34 +85,39 @@ def generateConfigs():
     {"GlobalReadVectorWidth": [-1, 1]}, \
     {"FractionalLoad": [1]}]
 
-  #ttSides = [([2,4,8], [2,4,8]),([3,5,7], [2,4,8])]
-  ttSides = [([4], [4,8]), ([5], [4,8])]
-  #ttSides = [8]
-  ttList = []
-  for ttIndexSet in ttSides:
-    tt = []
-    for i in ttIndexSet[0]:
-      for j in ttIndexSet[1]:
-        tt.append([i, j])
-    ttList.append(tt)
+  configsList = []
+  for problemTypeConfig in problemTypeConfigs:
 
-  wgSides = [([8,16],[8]), ([8,16],[16])]
-  wgList = []
-  for wgIndexSet in wgSides:
-    wg = []
-    for i in wgIndexSet[0]:
-      for j in wgIndexSet[1]:
-        wg.append([i,j,1])
-    wgList.append(wg)
+    #ttSides = [([2,4,8], [2,4,8]),([3,5,7], [2,4,8])]
+    ttSides = [([4], [4,8]), ([5], [4,8])]
+    #ttSides = [8]
+    ttList = []
+    for ttIndexSet in ttSides:
+      tt = []
+      for i in ttIndexSet[0]:
+        for j in ttIndexSet[1]:
+          tt.append([i, j])
+      ttList.append(tt)
+
+    wgSides = [([8,16],[8]), ([8,16],[16])]
+    lsu = [1,2]
+    wgList = []
+    for wgIndexSet in wgSides:
+      wg = []
+      for i in wgIndexSet[0]:
+        for j in wgIndexSet[1]:
+          for l in lsu:
+            wg.append([i,j,l])
+      wgList.append(wg)
     #wg = [[16,16,1]]
 
-  configsList = []
-  for tt in ttList:
-    for wg in wgList:
-      fp = deepcopy(forkParameters)
-      fp.append({"ThreadTile": tt})
-      fp.append({"WorkGroup": wg})
-      configsList.append((problemTypeConfig, benchmarkCommonParameters, fp))
+    
+    for tt in ttList:
+      for wg in wgList:
+        fp = deepcopy(forkParameters)
+        fp.append({"ThreadTile": tt})
+        fp.append({"WorkGroup": wg})
+        configsList.append((problemTypeConfig, benchmarkCommonParameters, fp))
   
   return configsList
 
@@ -128,31 +140,100 @@ def generateAllSolutions(globalSourcePath, effectiveWorkingPath):
 
     configCount += 1
 
-def runSizesForAllSolutions(sizes, effectiveWorkingPath, clientBuildDir):
-  thePaths = [f.path for f in os.scandir(effectiveWorkingPath) if f.is_dir() and f.name != "client"]
-  for path in thePaths:
-    #print (type(path))
-    #print (path)
-    libraryPath = os.path.join(path, 'source', 'library' )
-    if os.path.isdir(libraryPath):
-      #print (libPath)
-      metadataFilepath = os.path.join(libraryPath, "metadata.yaml")
-      metadataFile = YAMLIO.readConfig(metadataFilepath)
-      #print (metadataFile["ProblemType"])
-      problemTypeDict = metadataFile["ProblemType"]
-      #problemTypeObj = ProblemType(problemTypeDict)
-      #problemTypeName = str(problemTypeObj)
-      problemSizes = ProblemSizes(problemTypeDict, sizes)
-      #print (True)
-      dataPath = ensurePath(os.path.join(path, "data"))
-      configFilePath = ensurePath(os.path.join(path, "configs"))
-      dataFilePath = os.path.join(dataPath, "benchmark.csv")
-      configFile = os.path.join(configFilePath, "ClientParameters.ini")
-      scriptPath = ensurePath(os.path.join(path, "script"))
+def getProblemTypeName(problemTypeConfig):
+  problemTypeObj = ProblemType(problemTypeConfig)
+  problemTypeName = str(problemTypeObj)
 
-      CreateBenchmarkClientPrametersForSizes(libraryPath, problemSizes, dataFilePath, configFile)
-      #returncode = runNewClient(scriptPath, configFile, clientBuildDir)
-      runNewClient(scriptPath, configFile, clientBuildDir)
+  return problemTypeName
+
+#def runSizesForAllSolutions(effectiveWorkingPath, clientBuildDir):
+
+#  problemTypeConfigs = getProblemTypeConfigs()[0]
+#  problemTypeObj = ProblemType(problemTypeConfigs)
+#  problemTypeName = str(problemTypeObj)
+
+#  print (problemTypeName)
+
+def getSizeMapper():
+  sizeMap = {
+    "Cijk_Ailk_Bjlk_SB": [
+      #{"Exact": [784, 512, 1, 128]}, 
+      #{"Exact": [784, 128, 1, 512]}, 
+      #{"Exact": [196, 1024, 64, 256]}, 
+      {"Exact": [196, 256, 64, 1024]}
+    ],
+    "Cijk_Ailk_Bljk_SB": [
+      #{"Exact": [784, 512, 1, 128]}, \
+      #{"Exact": [784, 128, 1, 512]}, \
+      #{"Exact": [196, 1024, 64, 256]}, \
+      {"Exact": [196, 256, 64, 1024]}
+    ],
+    "Cijk_Alik_Bljk_SB": [
+      #{"Exact": [784, 512, 1, 128]}, \
+      #{"Exact": [784, 128, 1, 512]}, \
+      #{"Exact": [196, 1024, 64, 256]}, \
+      {"Exact": [196, 256, 64, 1024]}
+    ]}
+
+  return sizeMap
+
+#def runSizesForAllSolutions(effectiveWorkingPath, clientBuildDir):
+
+#  problemTypeConfigs = getProblemTypeConfigs()[0]
+#  problemTypeObj = ProblemType(problemTypeConfigs)
+#  problemTypeName = str(problemTypeObj)
+
+#  print (problemTypeName)
+#  sizeMap = getSizeMapper()
+
+#  for key in sizeMap:
+#    print (key)
+#   value = sizeMap[key]
+#    print (value)
+
+def runSizesForAllSolutions(effectiveWorkingPath, clientBuildDir, outputPath):
+
+  #sizes = [
+  #  {"Exact": [784, 512, 1, 128]}, \
+  #  {"Exact": [784, 128, 1, 512]}, \
+  #  {"Exact": [196, 1024, 64, 256]}, \
+  #  {"Exact": [196, 256, 64, 1024]}
+  #]
+
+  sizeMap = getSizeMapper()
+
+  for sizeKey in sizeMap:
+    
+    currentWorkingPath = os.path.join(effectiveWorkingPath, sizeKey)
+    currentResultsPath = ensurePath(os.path.join(outputPath, sizeKey))
+    thePaths = [f for f in os.scandir(currentWorkingPath) if f.is_dir() and f.name != "client"]
+    for pathObj in thePaths:
+      #print (type(path))
+      #print (path)
+      path = pathObj.path
+      localPathName = pathObj.name
+      localOutputPath = ensurePath(os.path.join(currentResultsPath, localPathName))
+      libraryPath = os.path.join(path, 'source', 'library' )
+      sizes = sizeMap[sizeKey]
+      if os.path.isdir(libraryPath):
+        #print (libPath)
+        metadataFilepath = os.path.join(libraryPath, "metadata.yaml")
+        metadataFile = YAMLIO.readConfig(metadataFilepath)
+        #print (metadataFile["ProblemType"])
+        problemTypeDict = metadataFile["ProblemType"]
+        #problemTypeObj = ProblemType(problemTypeDict)
+        #problemTypeName = str(problemTypeObj)
+        problemSizes = ProblemSizes(problemTypeDict, sizes)
+        #print (True)
+        dataPath = ensurePath(os.path.join(localOutputPath, "data"))
+        configFilePath = ensurePath(os.path.join(localOutputPath, "configs"))
+        dataFilePath = os.path.join(dataPath, "benchmark.csv")
+        configFile = os.path.join(configFilePath, "ClientParameters.ini")
+        scriptPath = ensurePath(os.path.join(localOutputPath, "script"))
+
+        CreateBenchmarkClientPrametersForSizes(libraryPath, problemSizes, dataFilePath, configFile)
+        #returncode = runNewClient(scriptPath, configFile, clientBuildDir)
+        runNewClient(scriptPath, configFile, clientBuildDir)
 
 def GenerateSolutions(userArgs):
     
@@ -250,6 +331,7 @@ def GenerateSolutions(userArgs):
     generateAllSolutions(globalSourcePath, effectiveWorkingPath)
     
     
+    
     #problemSizeGroupConfigs = [{"BenchmarkCommonParameters": benchmarkCommonParameters, "ForkParameters": forkParameters}]
     #hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, problemSizeGroupConfigs)
 
@@ -262,17 +344,18 @@ def GenerateSolutions(userArgs):
 
     #problemTypeDict = solutionsList[0]["ProblemType"].state
 
-    sizes = [
-        {"Exact": [784, 512, 1, 128]}, \
-        {"Exact": [784, 128, 1, 512]}, \
-        {"Exact": [196, 1024, 64, 256]}, \
-        {"Exact": [196, 256, 64, 1024]}
-    ]
+    #sizes = [
+    #    {"Exact": [784, 512, 1, 128]}, \
+    #    {"Exact": [784, 128, 1, 512]}, \
+    #    {"Exact": [196, 1024, 64, 256]}, \
+    #    {"Exact": [196, 256, 64, 1024]}
+    #]
 
     ###### use this $$$ 
-    thePaths = [f.path for f in os.scandir(effectiveWorkingPath) if f.is_dir()]
-    for currentWorkingPath in thePaths:
-      runSizesForAllSolutions(sizes, currentWorkingPath, clientBuildDir)
+    #thePaths = [f.path for f in os.scandir(effectiveWorkingPath) if f.is_dir()]
+    #for currentWorkingPath in thePaths:
+    outputPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_4/tune0/testLibrary/results"
+    runSizesForAllSolutions(effectiveWorkingPath, clientBuildDir, outputPath)
 
     #problemSizes = ProblemSizes(problemTypeDict, sizes)
     #problemSizes = ProblemSizes(problemTypeDict, None)
