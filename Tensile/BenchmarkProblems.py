@@ -19,6 +19,7 @@
 # CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ################################################################################
 
+import collections
 import csv
 import filecmp
 import itertools
@@ -35,7 +36,7 @@ from . import YAMLIO
 from . import Utils
 from .BenchmarkStructs import BenchmarkProcess
 from .ClientWriter import runClient, writeClientParameters, writeClientConfig
-from .Common import globalParameters, HR, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime, ProgressBar
+from .Common import globalParameters, HR, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime
 from .KernelWriterAssembly import KernelWriterAssembly
 from .KernelWriterSource import KernelWriterSource
 from .SolutionStructs import Solution, ProblemType
@@ -131,41 +132,46 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
     sourceDir = \
       os.path.join(stepBaseDir, "source" )
     ensurePath(sourceDir)
-    pushWorkingPath("sourceTmp")
-    filesToCopy = [
-        "SolutionMapper.h",
-        "Client.cpp",
-        "Client.h",
-        "CMakeLists.txt",
-        "DeviceStats.h",
-        "TensorUtils.h",
-        "MathTemplates.cpp",
-        "MathTemplates.h",
-        "TensileTypes.h",
-        "tensile_bfloat16.h",
-        "KernelHeader.h",
-        "ReferenceCPU.h",
-        "SolutionHelper.cpp",
-        "SolutionHelper.h",
-        "Tools.cpp",
-        "Tools.h",
-        ]
 
-    for f in filesToCopy:
-      shutil.copy(
-          os.path.join(globalParameters["SourcePath"], f),
-          globalParameters["WorkingPath"] )
-    if globalParameters["RuntimeLanguage"] == "OCL":
-      shutil.copy(
-          os.path.join(globalParameters["SourcePath"], "FindOpenCL.cmake"),
-          globalParameters["WorkingPath"] )
+    filesToCopy = []
+    if globalParameters["OldClientSourceTmp"]:
+      pushWorkingPath("sourceTmp")
+      filesToCopy = [
+          "SolutionMapper.h",
+          "Client.cpp",
+          "Client.h",
+          "CMakeLists.txt",
+          "DeviceStats.h",
+          "TensorUtils.h",
+          "MathTemplates.cpp",
+          "MathTemplates.h",
+          "TensileTypes.h",
+          "tensile_bfloat16.h",
+          "KernelHeader.h",
+          "ReferenceCPU.h",
+          "SolutionHelper.cpp",
+          "SolutionHelper.h",
+          "Tools.cpp",
+          "Tools.h",
+          ]
+
+      for f in filesToCopy:
+        shutil.copy(
+            os.path.join(globalParameters["SourcePath"], f),
+            globalParameters["WorkingPath"] )
+      if globalParameters["RuntimeLanguage"] == "OCL":
+        shutil.copy(
+            os.path.join(globalParameters["SourcePath"], "FindOpenCL.cmake"),
+            globalParameters["WorkingPath"] )
+      else:
+        shutil.copy(
+            os.path.join(globalParameters["SourcePath"], "FindHIP.cmake"),
+            globalParameters["WorkingPath"] )
+        shutil.copy(
+            os.path.join(globalParameters["SourcePath"], "FindHCC.cmake"),
+            globalParameters["WorkingPath"] )
     else:
-      shutil.copy(
-          os.path.join(globalParameters["SourcePath"], "FindHIP.cmake"),
-          globalParameters["WorkingPath"] )
-      shutil.copy(
-          os.path.join(globalParameters["SourcePath"], "FindHCC.cmake"),
-          globalParameters["WorkingPath"] )
+      pushWorkingPath("source")
 
     ############################################################################
     # Enumerate Benchmark Permutations
@@ -194,10 +200,8 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
     # Enumerate Solutions = Hardcoded * Benchmark
     ############################################################################
     print1("# Enumerating Solutions")
-    if globalParameters["PrintLevel"] >= 1:
-      progressBar = ProgressBar(maxPossibleSolutions)
     solutionSet = set() # avoid duplicates for nlca=-1, 1
-    for hardcodedIdx in range(0, numHardcoded):
+    for hardcodedIdx in Utils.tqdm(range(0, numHardcoded), "Enumerating Solutions"):
       solutions.append([])
       hardcodedParamDict = benchmarkStep.hardcodedParameters[hardcodedIdx]
       for benchmarkIdx, benchmarkPermutation in enumerate(benchmarkPermutations):
@@ -225,19 +229,14 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
         else:
           if globalParameters["PrintSolutionRejectionReason"]:
             print1("rejecting solution %s" % str(solutionObject))
-        if globalParameters["PrintLevel"] >= 1:
-          progressBar.increment()
 
     # remove hardcoded that don't have any valid benchmarks
-    removeHardcoded = []
-    for hardcodedIdx in range(0, numHardcoded):
-      if len(solutions[hardcodedIdx]) == 0:
-        hardcodedParamDict = benchmarkStep.hardcodedParameters[hardcodedIdx]
-        removeHardcoded.append(hardcodedParamDict)
-    removesExist = len(removeHardcoded) > 0
-    for hardcodedParam in removeHardcoded:
-      benchmarkStep.hardcodedParameters.remove(hardcodedParam)
+    removeHardcoded = list([x for i,x in enumerate(benchmarkStep.hardcodedParameters) if len(solutions[i]) == 0])
+    validHardcoded =  list([x for i,x in enumerate(benchmarkStep.hardcodedParameters) if len(solutions[i]) > 0])
 
+    removesExist = len(removeHardcoded) > 0
+
+    benchmarkStep.hardcodedParameters = validHardcoded
 
     if removesExist:
       print1("# Updating winners since enumeration removed unused hardcoded solutions.  removeHardcoded=%u winners=%u" %(len(removeHardcoded), len(winners.winners)))
@@ -308,21 +307,22 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
       # remove from solution 2D list also
       solutions = list([s for s in solutions if len(s) > 0])
 
-    print1("# Copying files that differ from sourceTmp -> source")
-    sourceTmp = globalParameters["WorkingPath"]
-    files = os.listdir(sourceTmp)
-    for f in files:
-      f0 = os.path.join(sourceTmp, f)
-      f1 = os.path.join(sourceDir, f)
-      if os.path.isdir(f0):
-        #print "cpDir:", f0, f1
-        if os.path.isdir(f1):
-          shutil.rmtree( f1, True )
-        shutil.copytree( f0, f1 )
-      elif not os.path.exists(f1) or not filecmp.cmp(f0, f1):
-        #print "cp:", f0, f1
-        shutil.copy( f0, f1 )
-    shutil.rmtree( sourceTmp, True )
+    if globalParameters["OldClientSourceTmp"]:
+      print1("# Copying files that differ from sourceTmp -> source")
+      sourceTmp = globalParameters["WorkingPath"]
+      files = os.listdir(sourceTmp)
+      for f in files:
+        f0 = os.path.join(sourceTmp, f)
+        f1 = os.path.join(sourceDir, f)
+        if os.path.isdir(f0):
+          #print "cpDir:", f0, f1
+          if os.path.isdir(f1):
+            shutil.rmtree( f1, True )
+          shutil.copytree( f0, f1 )
+        elif not os.path.exists(f1) or not filecmp.cmp(f0, f1):
+          #print "cp:", f0, f1
+          shutil.copy( f0, f1 )
+      shutil.rmtree( sourceTmp, True )
 
     popWorkingPath() # source
 
@@ -483,17 +483,24 @@ def writeBenchmarkFiles(stepBaseDir, solutions, problemSizes, stepName, filesToC
   ##############################################################################
   # Min Naming
   ##############################################################################
+
   kernels = []
   kernelsBetaOnly = []
-  for solution in solutions:
+  kernelNames = set()
+  kernelNamesBetaOnly = set()
+  for solution in Utils.tqdm(solutions, "Finding unique solutions"):
     solutionKernels = solution.getKernels()
     for kernel in solutionKernels:
-      if kernel not in kernels:
+      kName = Solution.getNameFull(kernel)
+      if kName not in kernelNames:
         kernels.append(kernel)
+        kernelNames.add(kName)
     solutionKernelsBetaOnly = solution.getKernelsBetaOnly()
     for kernel in solutionKernelsBetaOnly:
-      if kernel not in kernelsBetaOnly:
+      kName = Solution.getNameFull(kernel)
+      if kName not in kernelNamesBetaOnly:
         kernelsBetaOnly.append(kernel)
+        kernelNamesBetaOnly.add(kName)
 
   solutionSerialNaming = Solution.getSerialNaming(solutions)
   kernelSerialNaming = Solution.getSerialNaming(kernels)
@@ -541,10 +548,11 @@ def writeBenchmarkFiles(stepBaseDir, solutions, problemSizes, stepName, filesToC
 ################################################################################
 # FrozenDictionary
 ################################################################################
-class FrozenDictionary:
+class FrozenDictionary(collections.abc.Mapping):
   def __init__(self, parameters):
     self.parameters = deepcopy(parameters)
-    self.hashValue = hash(Solution.getNameFull(self.parameters))
+    self.stringValue = Solution.getNameFull(self.parameters)
+    self.hashValue = hash(self.stringValue)
 
   def __len__(self):
     return len(self.parameters)
@@ -559,7 +567,7 @@ class FrozenDictionary:
     return self.hashValue
 
   def __str__(self):
-    return Solution.getNameFull(self.parameters)
+    return self.stringValue
   def __repr__(self):
     return self.__str__()
 
@@ -583,10 +591,8 @@ class WinningParameterDict:
   # Add Winning Parameters For Hardcoded Parameters
   def addResults( self, hardcodedParameterList, benchmarkPermutations, \
       solutions, results):
-    if globalParameters["PrintLevel"] >= 1:
-      print1("# Adding Results to Solution Database")
-      progressBar = ProgressBar(len(results))
-    for hardcodedIdx,hardcodedResults in enumerate(results):
+    print1("# Adding Results to Solution Database")
+    for hardcodedIdx,hardcodedResults in enumerate(Utils.tqdm(results)):
       if not hardcodedResults: continue
       
       hardcodedParameters = hardcodedParameterList[hardcodedIdx]
@@ -614,8 +620,6 @@ class WinningParameterDict:
       #oldScore = matches[0][2]
       self.winners[hardcodedParametersKey][0].update(winningParameters)
       self.winners[hardcodedParametersKey][1] = winningScore
-      if globalParameters["PrintLevel"] >= 1:
-        progressBar.increment()
 
 
   ##########################################################
