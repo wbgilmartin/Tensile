@@ -491,7 +491,7 @@ def TensileCreateClientLibrary(userArgs):
   if args.client_build_path:
     globalParameters["ClientBuildPath"] = args.client_build_path
 
-  effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_2/tune0/testLibrary"
+  effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_2/tune1/testLibrary"
 
   globalSourcePath = globalParameters["SourcePath"]
   

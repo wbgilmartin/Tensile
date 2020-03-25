@@ -298,8 +298,8 @@ def GenerateSolutions(userArgs):
     #  for j in validThreadTileSides:
     #    validThreadTiles.append([i, j])
 
-    globalSourcePath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/Tensile-library_step/Tensile/Source"
-    effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_4/tune0/testLibrary"
+    globalSourcePath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/Tensile-library-step2/Tensile/Source"
+    effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_4/tune2/testLibrary"
     ensurePath(effectiveWorkingPath)
 
     #sourcePath = ensurePath(os.path.join(effectiveWorkingPath, "source"))
@@ -354,7 +354,7 @@ def GenerateSolutions(userArgs):
     ###### use this $$$ 
     #thePaths = [f.path for f in os.scandir(effectiveWorkingPath) if f.is_dir()]
     #for currentWorkingPath in thePaths:
-    outputPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_4/tune0/testLibrary/results"
+    outputPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_4/tune2/testLibrary/results"
     runSizesForAllSolutions(effectiveWorkingPath, clientBuildDir, outputPath)
 
     #problemSizes = ProblemSizes(problemTypeDict, sizes)
