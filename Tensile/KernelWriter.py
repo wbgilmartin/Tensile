@@ -2572,8 +2572,8 @@ for codeObjectFileName in codeObjectFileNames:
     fileBase = os.path.join(asmPath, kernelName )
     assemblyFileName = "%s.s" % fileBase
 
-    #replacementKernel = self.getReplacementKernelPath(kernel)
-    replacementKernel = None
+    replacementKernel = self.getReplacementKernelPath(kernel)
+    #replacementKernel = None
     if replacementKernel is not None:
       self.tPA = tensorParametersA = {}
       self.tPB = tensorParametersB = {}

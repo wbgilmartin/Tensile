@@ -17,7 +17,7 @@ from . import SolutionLibrary
 from . import Utils
 
 from .BenchmarkStructs import BenchmarkProcess
-from .ClientWriter import runClient, writeClientParameters, writeClientConfig
+from .ClientWriter import runClient, writeClientParameters #, writeClientConfigNew
 from .Common import ClientExecutionLock, assignGlobalParameters, globalParameters, defaultSolution, defaultBenchmarkCommonParameters, \
   HR, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime, ProgressBar, hasParam
 from .KernelWriterAssembly import KernelWriterAssembly
@@ -29,9 +29,6 @@ from .SolutionLibrary import MasterSolutionLibrary
 from .Contractions import ProblemType as ContractionsProblemType
 from .TensileCreateClientLibrary import assigenParameters, generateSolutions, WriteClientLibraryFromSolutions, \
     CreateBenchmarkClientPrametersForSizes, runNewClient
-
-
-
 
 
 def buildSolution(problemTypeConfig, benchmarkCommonParameters, forkParameters, globalSourcePath, effectiveWorkingPath):
@@ -299,7 +296,7 @@ def GenerateSolutions(userArgs):
     #    validThreadTiles.append([i, j])
 
     globalSourcePath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/Tensile-library-step2/Tensile/Source"
-    effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_4/tune2/testLibrary"
+    effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_5/tune0/testLibrary"
     ensurePath(effectiveWorkingPath)
 
     #sourcePath = ensurePath(os.path.join(effectiveWorkingPath, "source"))
@@ -354,7 +351,7 @@ def GenerateSolutions(userArgs):
     ###### use this $$$ 
     #thePaths = [f.path for f in os.scandir(effectiveWorkingPath) if f.is_dir()]
     #for currentWorkingPath in thePaths:
-    outputPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_4/tune2/testLibrary/results"
+    outputPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_5/tune0/testLibrary/results"
     runSizesForAllSolutions(effectiveWorkingPath, clientBuildDir, outputPath)
 
     #problemSizes = ProblemSizes(problemTypeDict, sizes)

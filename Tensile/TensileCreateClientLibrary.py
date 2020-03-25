@@ -21,7 +21,7 @@ from . import SolutionLibrary
 from . import Utils
 
 from .BenchmarkStructs import BenchmarkProcess
-from .ClientWriter import runClient, writeClientParameters, writeClientConfig
+from .ClientWriter import runClient, writeClientParameters, writeClientConfigNew
 from .Common import ClientExecutionLock, assignGlobalParameters, globalParameters, defaultSolution, defaultBenchmarkCommonParameters, \
   HR, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime, ProgressBar, hasParam
 from .KernelWriterAssembly import KernelWriterAssembly
@@ -278,7 +278,7 @@ def runProblemSizeGroup(problemSizeGroupIdx, problemSizeGroupConfig, problemType
     ensurePath(scriptPath)
     configFile = os.path.join(scriptPath, '../source/ClientParameters.ini')
     newSolution = next(iter(newLibrary.solutions.values()))
-    writeClientConfig(True, benchmarkStep.problemSizes, newSolution.problemType, codeObjectFiles, resutlsFilePath, configFile)
+    writeClientConfigNew(True, benchmarkStep.problemSizes, newSolution.problemType, codeObjectFiles, resutlsFilePath, configFile)
 
     returncode = runNewClient(scriptPath, configFile)
 
@@ -322,7 +322,7 @@ def CreateBenchmarkClientPrametersForSizes(libraryPath, problemSizes, dataFilePa
   #sizeFile = YAMLIO.readConfig(sizeFilePath)
   #problemSizes = ProblemSizes(problemTypeDict, sizeFile)
 
-  writeClientConfig(True, problemSizes, problemType, codeObjectFiles, dataFilePath, configFile)
+  writeClientConfigNew(True, problemSizes, problemType, codeObjectFiles, dataFilePath, configFile)
 
 def CreateBenchmarkClientPrameters(libraryPath, sizeFilePath, dataFilePath, configFile):
 
@@ -337,7 +337,7 @@ def CreateBenchmarkClientPrameters(libraryPath, sizeFilePath, dataFilePath, conf
   sizeFile = YAMLIO.readConfig(sizeFilePath)
   problemSizes = ProblemSizes(problemTypeDict, sizeFile)
 
-  writeClientConfig(True, problemSizes, problemType, codeObjectFiles, dataFilePath, configFile)
+  writeClientConfigNew(True, problemSizes, problemType, codeObjectFiles, dataFilePath, configFile)
 
 def forkHardcodedParameters( hardcodedParameters, update ):
   updatedHardcodedParameters = []

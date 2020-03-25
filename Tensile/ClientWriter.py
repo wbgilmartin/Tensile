@@ -540,29 +540,92 @@ def dataInitParams(problemType):
             ('init-alpha', dataInitName(initAlpha)),
             ('init-beta',  dataInitName(initBeta))]
 
-#def writeClientConfig(forBenchmark, solutions, problemSizes, stepName, stepBaseDir, newLibrary, codeObjectFiles):
-def writeClientConfig(forBenchmark, problemSizes, problemType, codeObjectFiles, resultsFileName, parametersFilePath):
+def writeClientConfig(forBenchmark, solutions, problemSizes, stepName, stepBaseDir, newLibrary, codeObjectFiles):
 
+    filename = os.path.join(globalParameters["WorkingPath"], "ClientParameters.ini")
+    if len(newLibrary.solutions)==0:
+      raise RuntimeError ("No valid solutions found")
+    with open(filename, "w") as f:
+        def param(key, value):
+            f.write("{}={}\n".format(key, value))
 
-    #filename = os.path.join(globalParameters["WorkingPath"], "ClientParameters.ini")
+        sourceDir = os.path.join(stepBaseDir, "source")
+        libraryFile = os.path.join(sourceDir, "library", "TensileLibrary.yaml")
+        param("library-file", libraryFile)
+        for coFile in codeObjectFiles:
+            param("code-object", os.path.join(sourceDir,coFile))
+
+        if globalParameters["NewClient"] == 1:
+          param('results-file', os.path.join(stepBaseDir, "../Data", stepName+"-new.csv"))
+        else:
+          param('results-file', os.path.join(stepBaseDir, "../Data", stepName+".csv"))
+
+        newSolution = next(iter(newLibrary.solutions.values()))
+        if newSolution.problemType.convolution and globalParameters["ConvolutionVsContraction"]:
+            param('convolution-identifier', newSolution.problemType.convolution.identifier())
+        param('problem-identifier', newSolution.problemType.operationIdentifier)
+        param('a-type',     newSolution.problemType.aType.toEnum())
+        param('b-type',     newSolution.problemType.bType.toEnum())
+        param('c-type',     newSolution.problemType.cType.toEnum())
+        param('d-type',     newSolution.problemType.dType.toEnum())
+        param('alpha-type', newSolution.problemType.alphaType.toEnum())
+        param('beta-type',  newSolution.problemType.betaType.toEnum())
+
+        param('high-precision-accumulate',  newSolution.problemType.highPrecisionAccumulate)
+
+        for problem in problemSizes.problems:
+            for key,value in problemSizeParams(newSolution, problem):
+                param(key,value)
+            #param('problem-size', ','.join(map(str,problemSize)))
+
+        param("device-idx",               globalParameters["Device"])
+
+        for key,value in dataInitParams(newSolution.problemType):
+            param(key, value)
+
+        param("c-equal-d",                globalParameters["CEqualD"])
+
+        if globalParameters["PrintTensorA"]:
+          param("print-tensor-a",         1)
+        if globalParameters["PrintTensorB"]:
+          param("print-tensor-b",         1)
+        if globalParameters["PrintTensorC"]:
+          param("print-tensor-c",         1)
+        if globalParameters["PrintTensorD"]:
+          param("print-tensor-d",         1)
+        if globalParameters["PrintTensorRef"]:
+          param("print-tensor-ref",         1)
+
+        if globalParameters["BoundsCheck"]:
+          param("bounds-check", 1)
+
+        param("print-valids",             globalParameters["ValidationPrintValids"])
+        param("print-max",                globalParameters["ValidationMaxToPrint"])
+        param("num-benchmarks",           globalParameters["NumBenchmarks"])
+        param("num-elements-to-validate", globalParameters["NumElementsToValidate"])
+        param("num-enqueues-per-sync",    globalParameters["EnqueuesPerSync"])
+        param("num-syncs-per-benchmark",  globalParameters["SyncsPerBenchmark"])
+        param("use-gpu-timer",            globalParameters["KernelTime"])
+        if globalParameters["ConvolutionVsContraction"]:
+            assert(newSolution.problemType.convolution)
+            param("convolution-vs-contraction", globalParameters["ConvolutionVsContraction"])
+        if not globalParameters["KernelTime"]:
+            param("num-warmups", 1)
+        param("sleep-percent",            globalParameters["SleepPercent"])
+
+def writeClientConfigNew(forBenchmark, problemSizes, problemType, codeObjectFiles, resultsFileName, parametersFilePath):
+
     libraryDir, _ = os.path.split(codeObjectFiles[0])
     libraryFile = os.path.join(libraryDir, "TensileLibrary.yaml")
     with open(parametersFilePath, "w") as f:
         def param(key, value):
             f.write("{}={}\n".format(key, value))
 
-        #sourceDir = os.path.join(stepBaseDir, "source")
-        #libraryFile = os.path.join(sourceDir, "library", "TensileLibrary.yaml")
         param("library-file", libraryFile)
         for coFile in codeObjectFiles:
             param("code-object", os.path.join(coFile,coFile))
 
-        #if globalParameters["NewClient"] == 1:
-        #  param('results-file', os.path.join(stepBaseDir, "../Data", stepName+"-new.csv"))
-        #else:
-        #  param('results-file', os.path.join(stepBaseDir, "../Data", stepName+".csv"))
         param('results-file', resultsFileName)
-        #newSolution = next(iter(newLibrary.solutions.values()))
         if problemType.convolution:
             param('convolution-identifier', problemType.convolution.identifier())
         param('problem-identifier', problemType.operationIdentifier)
@@ -578,7 +641,6 @@ def writeClientConfig(forBenchmark, problemSizes, problemType, codeObjectFiles, 
         for problemSize in problemSizes.sizes:
             for key,value in problemSizeParams2(problemType, problemSize):
                 param(key,value)
-            #param('problem-size', ','.join(map(str,problemSize)))
 
         param("device-idx",               globalParameters["Device"])
 
