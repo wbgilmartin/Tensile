@@ -1792,6 +1792,8 @@ class Solution:
             and totalElementsPerp % nlp == 0:
           state["NumLoadsCoalesced%s"%tc] = nlc
           state["NumLoadsPerpendicular%s"%tc] = nlp
+          #print("NumLoadsCoalesced",state["NumLoadsCoalesced%s"%tc])
+          #print("NumLoadsPerpendicular",state["NumLoadsPerpendicular%s"%tc])
           foundValid = True
           break
       if not foundValid:
@@ -1842,16 +1844,9 @@ class Solution:
           // state["NumLoadsCoalesced%s"%tc]
       state["LSP%s"%tc] = int(math.ceil(float(state["DepthU"]) / state["NumLoadsPerpendicular%s"%tc]))
     else:
-      if not state["TransposeLDS"]:
-        state["LSC%s"%tc] = int(math.ceil(float(state["DepthU"]) / state["NumLoadsCoalesced%s"%tc]))
-        state["LSP%s"%tc] = state["MacroTile%s"%tc] \
-             // state["NumLoadsPerpendicular%s"%tc]
-      else:
-       # above LSP is broken  LSP is calculated from total vectors and hence LVP calculation from LSP is wrong
-        state["LSC%s"%tc] = int(math.ceil(float(state["DepthU"]) / state["NumLoadsCoalesced%s"%tc]))
-       # Per instruction across the entire group:
-        elementsLoadedPerInst = state["NumThreads"]*state["GlobalReadVectorWidth"]
-        state["LSP%s"%tc] = min(state["MacroTile%s"%tc], elementsLoadedPerInst // state["DepthU"])  if not state["DepthU"] >= elementsLoadedPerInst else 1
+      state["LSC%s"%tc] = int(math.ceil(float(state["DepthU"]) / state["NumLoadsCoalesced%s"%tc]))
+      state["LSP%s"%tc] = state["MacroTile%s"%tc] \
+         // state["NumLoadsPerpendicular%s"%tc]
     
     return True
 
@@ -2226,7 +2221,7 @@ class Solution:
       #TODO : re-enable later after running testlists
       #state["StoreVectorWidth"] = state["VectorWidth"]
       # use wider store for best store optimization 
-      state["StoreVectorWidth"] = 4  
+      state["StoreVectorWidth"] = 4
 
 
     if state["VectorWidth"]*state["ProblemType"]["DataType"].numBytes() > 16:
@@ -2540,6 +2535,10 @@ class Solution:
       if state["LdsBlockSizePerPad"] == -1:
         state["LdsBlockSizePerPad"] = 256
 
+    if state["LocalReadVectorWidth"] != -1:
+      if not state["TransposeLDS"] == 1:
+        reject(state, "LocalReadVectorWidth requires TransposeLDS=1")
+
     ldsAlign = int(64 / state["ProblemType"]["DataType"].numRegisters())
     if not state["LdsBlockSizePerPad"] == -1:
         #calculate number of boundaries from MT*depthU
@@ -2817,15 +2816,17 @@ class Solution:
           # for LDD as well. see emitExtractAndScalePackedDims
           reject(state, "Packed dims for Assembly requires LdcEqualsLdd==True")
 
-    if packedC0 and state["PackGranularity"]==2 \
-        and state["AssertFree0ElementMultiple"]<state["VectorWidth"]:
-          if state["KernelLanguage"] == "Source":
-              reject(state, "packedC0 Source requires AF0EM>VectorWidth (for loads and stores)")
-          else:
+    if packedC0 and state["PackGranularity"]==2:
+      if state["KernelLanguage"] == "Source":
+        if state["AssertFree0ElementMultiple"]<state["VectorWidth"]:
+          reject(state, "packedC0 Source requires AF0EM>=VectorWidth (for loads and stores)")
+      else:
+        if state["AssertFree0ElementMultiple"]<state["VectorWidth"]\
+          or state["AssertFree0ElementMultiple"] == 1:
             if state["VectorStore"] <= 0:
               state["_VectorStore"] = 0
             else:
-              reject(state, "packedC0 Assembly requires AF0EM>VectorWidth or not VectorStore (for stores)")
+              reject(state, "packedC0 Assembly requires AF0EM>=VectorWidth or not VectorStore (for stores)")
 
     # Not currently suppored.  Support would require some changes in the
     # zeroPadRegs management:
