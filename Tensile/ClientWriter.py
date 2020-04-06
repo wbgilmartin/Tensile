@@ -611,8 +611,12 @@ def writeClientConfigNew(forBenchmark, problemSizes, problemType, codeObjectFile
             f.write("{}={}\n".format(key, value))
 
         param("library-file", libraryFile)
+        currentGFXName = "gfx%x%x%x" % globalParameters["CurrentISA"] 
         for coFile in codeObjectFiles:
-            param("code-object", os.path.join(coFile,coFile))
+            if (currentGFXName in coFile):
+                param("code-object", coFile)
+        #for coFile in codeObjectFiles:
+        #    param("code-object", os.path.join(coFile,coFile))
 
         param('results-file', resultsFileName)
         if problemType.convolution:
@@ -627,9 +631,13 @@ def writeClientConfigNew(forBenchmark, problemSizes, problemType, codeObjectFile
 
         param('high-precision-accumulate',  problemType.highPrecisionAccumulate)
 
-        for problemSize in problemSizes.sizes:
-            for key,value in problemSizeParams2(problemType, problemSize):
-                param(key,value)
+        #for problemSize in problemSizes.sizes:
+        for problem in problemSizes.problems:
+          for key,value in problemSizeParams2(problemType, list(problem.sizes)):
+              param(key,value)
+          #for problemSize in problem.sizes:
+          #  for key,value in problemSizeParams2(problemType, problemSize):
+          #    param(key,value)
 
         param("device-idx",               globalParameters["Device"])
 
