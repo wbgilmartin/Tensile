@@ -30,8 +30,9 @@
 #include <memory>
 
 #include <Tensile/SolutionLibrary.hpp>
-
 #include <Tensile/Tensile.hpp>
+//#include <Tensile/Tensile-tp.hpp>
+
 
 namespace Tensile
 {
@@ -71,7 +72,12 @@ namespace Tensile
             findBestSolution(MyProblem const& problem,
                              Hardware  const& hardware) const override
         {
+            //std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+            //tracepoint(tensile_tracing, my_first_tracepoint, 23, "hi there!");
             return library->findBestSolution(problem, hardware);
+            //std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+            //std::chrono::duration<double> time_span = t2 - t1;
+            //tracepoint(tensile_tracing, trace_time, time_span.count(), "MasterSolutionLibrary::findBestSolution");
         }
 
         virtual SolutionSet<MySolution>

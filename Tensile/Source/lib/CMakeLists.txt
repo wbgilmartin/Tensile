@@ -22,6 +22,9 @@
 cmake_minimum_required(VERSION 3.5)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14" )
+#set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -llttng-ust -ldl")
+#set(CMAKE_SHARED_LIBRARY_CXX_FLAGS "${CMAKE_SHARED_LIBRARY_CXX_FLAGS} -llttng-ust -ldl")
+#set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -llttng-ust -ldl")
 
 if(NOT DEFINED TENSILE_ROOT)
     get_filename_component(TENSILE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" DIRECTORY)
@@ -41,6 +44,7 @@ set(tensile_sources  ${tensile_sources}
     source/TensorDescriptor.cpp
     source/TensorOps.cpp
     source/Tensile.cpp
+    source/Tensile-tp.cpp
     source/Utils.cpp
     )
 
@@ -65,6 +69,8 @@ endif()
 include_directories ("${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 add_library (TensileHost STATIC ${tensile_sources})
+
+target_link_libraries(TensileHost PRIVATE lttng-ust dl)
 
 target_include_directories(TensileHost INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 

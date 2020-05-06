@@ -28,6 +28,7 @@
 #include <hip/hip_runtime.h>
 
 #include <cstddef>
+#include <Tensile/Tensile-tp.hpp>
 
 #if 0
 hipError_t hipHccModuleLaunchKernel(hipFunction_t f, uint32_t globalWorkSizeX,
@@ -214,7 +215,10 @@ namespace Tensile
                 std::cout << kernel.args;
             }
 
+            std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
             hipFunction_t function = getKernel(kernel.kernelName);
+            std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+
 
             void * kernelArgs = const_cast<void *>(kernel.args.data());
             size_t argsSize = kernel.args.size();
@@ -226,6 +230,7 @@ namespace Tensile
                 HIP_LAUNCH_PARAM_END
             };
 
+            std::chrono::high_resolution_clock::time_point t3 = std::chrono::high_resolution_clock::now();
             HIP_CHECK_EXC(hipExtModuleLaunchKernel(
                           function,
                           kernel.numWorkItems.x, kernel.numWorkItems.y, kernel.numWorkItems.z,
@@ -237,6 +242,13 @@ namespace Tensile
                           startEvent, // event
                           stopEvent  // event
                           ));
+            std::chrono::high_resolution_clock::time_point t4 = std::chrono::high_resolution_clock::now();
+
+            std::chrono::duration<double> ts1 = t2 - t1;
+            std::chrono::duration<double> ts2 = t4 - t3;
+
+            tracepoint(tensile_tracing, trace_time, ts1.count(), "SolutionAdapter::launchKernel getKernel");
+            tracepoint(tensile_tracing, trace_time, ts2.count(), "SolutionAdapter::launchKernel hipExtModuleLaunchKernel");
         }
 
         void SolutionAdapter::launchKernels(std::vector<KernelInvocation> const& kernels)
