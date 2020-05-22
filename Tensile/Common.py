@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (C) 2016-2020 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright 2016-2020 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -357,7 +357,7 @@ validParameters = {
     # G2L registers used to stage data.  Also replaces the
     # local write offset with an SGPR.
     # For an 8x8 TT with PrefetchGlobalRead=1 this can save 33 VGPRs.
-    #    - Requirements for DirectToLds=1: 
+    #    - Requirements for DirectToLds=1:
     #      GlobalLoadVectorWidth? = 1
     #      TransposeLDS = 1 for TLU=0 case
     "DirectToLds":                [ False, True ],
@@ -602,6 +602,16 @@ validParameters = {
     # If empty, do not use these instructions
     "MatrixInstruction":          validMatrixInstructions,
 
+    # Disable overlapping AB-tile vgpr and read/write addr vgprs with C-tile vgprs
+    # Valid only for MatrixInstruction enabled kernels, which by default overlaps
+    # C-tile w/ AB-tile until it's due for v_accvgpr_read before the writeback. Illustrated below:
+    # |<----------------------- valuC ----------------------->|
+    # |<--- valuA/B --->|<-- R/W pointers -->|xxx|<- Spares ->|
+    #                                          ^        ^
+    #         (Reserved by persistent kernels) ^        ^
+    #                       (Utilized by register pool) ^
+    "DisableVgprOverlapping":     [False, True],
+
     # If positive, each switch includes switches <= the specified switch.
     # For example 3 will enable NoPostLoop+NoGlobalRead+NoLocalWrite
     # If negative, setting is precise and will disable only the specified code piece.
@@ -743,7 +753,9 @@ validParameters = {
     # Padding boundary for LDS. defines block-size for pad insertion. for every 'LdsBlockSizePerPad' bytes, LDS padding (pad value from LdsPad parameter)
     # is added (readOffset aware of the pad and adjusts offset value based on this parameter value).good rule of thumb is LdsBlockSizePerPad >= unrollDepth * BPE
     # optimized value is 128
-    "LdsBlockSizePerPad":          [-1, 64, 128, 256],
+    # 0 means disable LdsBlockSizePerPad,
+    # -1 means value is determined by Tensile logic
+    "LdsBlockSizePerPad":          [-1, 0, 64, 128, 256],
 
     #Transpose LDS format. Local store in Coalsced dimension , same as optimized global fetch dimension . applicable only in TLU=0 case for miSIMD(s)
     "TransposeLDS":                [-1, 1, 0],
@@ -809,7 +821,7 @@ defaultBenchmarkCommonParameters = [
     {"KernelLanguage":            [ "Source" ] },
     {"LdsPadA":                   [ 0 ] },
     {"LdsPadB":                   [ 0 ] },
-    {"LdsBlockSizePerPad":        [ -1 ] },
+    {"LdsBlockSizePerPad":        [ 0 ] },
     {"TransposeLDS":              [ 0 ] },
     {"MaxOccupancy":              [ 40 ] },
     {"VectorWidth":               [ -1 ] },
@@ -885,6 +897,7 @@ defaultBenchmarkCommonParameters = [
     {"WorkGroupMapping":          [ 8 ] },
     {"ThreadTile":                [ [4,4] ] },
     {"MatrixInstruction":         [ [] ] },
+    {"DisableVgprOverlapping":    [ False ] },
     {"DisableAtomicFail":         [ 0 ] },
     {"DisableKernelPieces":       [ 0 ] },
     {"DepthU":                    [ -1 ] },
@@ -1324,7 +1337,7 @@ def assignGlobalParameters( config ):
   globalParameters["ROCmAgentEnumeratorPath"] = locateExe("/opt/rocm/bin", "rocm_agent_enumerator")
   if "CxxCompiler" in config:
     globalParameters["CxxCompiler"] = config["CxxCompiler"]
-  
+
   if "TENSILE_ROCM_ASSEMBLER_PATH" in os.environ:
     globalParameters["AssemblerPath"] = os.environ.get("TENSILE_ROCM_ASSEMBLER_PATH")
   elif globalParameters["AssemblerPath"] is None and globalParameters["CxxCompiler"] == "hipcc":
@@ -1337,6 +1350,7 @@ def assignGlobalParameters( config ):
     globalParameters["ExtractKernelPath"] = locateExe("/opt/rocm/bin", "extractkernel")
   else:
     globalParameters["ExtractKernelPath"] = locateExe("/opt/rocm/hip/bin", "extractkernel")
+    globalParameters["ClangOffloadBundlerPath"] = locateExe("/opt/rocm/llvm/bin", "clang-offload-bundler")
 
   if "ROCmAgentEnumeratorPath" in config:
     globalParameters["ROCmAgentEnumeratorPath"] = config["ROCmAgentEnumeratorPath"]

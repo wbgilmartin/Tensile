@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2019 Advanced Micro Devices, Inc.
+ * Copyright 2019-2020 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -11,8 +11,8 @@
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -40,10 +40,10 @@ hipError_t hipHccModuleLaunchKernel(hipFunction_t f, uint32_t globalWorkSizeX,
                                     hipEvent_t stopEvent = nullptr);
 #endif
 
-#include <Tensile/hip/HipSolutionAdapter.hpp>
-#include <Tensile/hip/HipUtils.hpp>
 #include <Tensile/Debug.hpp>
 #include <Tensile/EmbeddedData.hpp>
+#include <Tensile/hip/HipSolutionAdapter.hpp>
+#include <Tensile/hip/HipUtils.hpp>
 
 namespace Tensile
 {
@@ -61,22 +61,22 @@ namespace Tensile
         }
 
         SolutionAdapter::SolutionAdapter(bool debug, std::string const& name)
-            : m_debug(debug),
-              m_name(name)
+            : m_debug(debug)
+            , m_name(name)
         {
             m_debug = debug || Debug::Instance().printKernelArguments();
         }
 
         SolutionAdapter::~SolutionAdapter()
         {
-            for(auto module: m_modules)
+            for(auto module : m_modules)
                 hipModuleUnload(module);
         }
 
         void SolutionAdapter::loadCodeObjectFile(std::string const& path)
         {
             hipModule_t module;
-            auto error = hipModuleLoad(&module, path.c_str());
+            auto        error = hipModuleLoad(&module, path.c_str());
 
             if(error == hipErrorFileNotFound)
             {
@@ -103,10 +103,10 @@ namespace Tensile
             loadCodeObject(bytes.data());
         }
 
-        void SolutionAdapter::loadCodeObject(const void * image)
+        void SolutionAdapter::loadCodeObject(const void* image)
         {
             hipModule_t module;
-            auto error = hipModuleLoadData(&module, image);
+            auto        error = hipModuleLoadData(&module, image);
 
             if(error == hipErrorUnknown || error == hipErrorSharedObjectInitFailed)
             {
@@ -152,7 +152,7 @@ namespace Tensile
             for(size_t i = 0; i < embeddedData.size(); i++)
             {
                 hipModule_t nextModule;
-                auto error = hipModuleLoadData(&nextModule, embeddedData[i].data());
+                auto        error = hipModuleLoadData(&nextModule, embeddedData[i].data());
                 if(error == hipErrorUnknown || error == hipErrorSharedObjectInitFailed)
                     continue;
                 newModules.push_back(nextModule);
@@ -162,7 +162,8 @@ namespace Tensile
             {
                 std::lock_guard<std::mutex> guard(m_access);
                 m_modules.insert(m_modules.end(), newModules.begin(), newModules.end());
-                m_loadedModuleNames.push_back(concatenate("Embedded code object ", key, " (", newModules.size(), ")"));
+                m_loadedModuleNames.push_back(
+                    concatenate("Embedded code object ", key, " (", newModules.size(), ")"));
             }
         }
 
@@ -179,10 +180,10 @@ namespace Tensile
             if(it != m_kernels.end())
                 return it->second;
 
-            for(auto module: m_modules)
+            for(auto module : m_modules)
             {
                 hipFunction_t rv;
-                auto err = hipModuleGetFunction(&rv, module, name.c_str());
+                auto          err = hipModuleGetFunction(&rv, module, name.c_str());
 
                 if(err == hipSuccess)
                 {
@@ -195,7 +196,8 @@ namespace Tensile
                 }
             }
 
-            throw std::runtime_error(concatenate("Kernel ", name, " not found in any loaded module."));
+            throw std::runtime_error(
+                concatenate("Kernel ", name, " not found in any loaded module."));
         }
 
         void SolutionAdapter::launchKernel(KernelInvocation const& kernel)
@@ -204,21 +206,21 @@ namespace Tensile
         }
 
         void SolutionAdapter::launchKernel(KernelInvocation const& kernel,
-                                           hipStream_t stream,
-                                           hipEvent_t startEvent,
-                                           hipEvent_t stopEvent)
+                                           hipStream_t             stream,
+                                           hipEvent_t              startEvent,
+                                           hipEvent_t              stopEvent)
         {
             if(m_debug)
             {
                 std::cout << "Kernel " << kernel.kernelName << std::endl;
-                std::cout << " l" << kernel.workGroupSize << " x g" << kernel.numWorkGroups << " = " << kernel.numWorkItems << std::endl;
+                std::cout << " l" << kernel.workGroupSize << " x g" << kernel.numWorkGroups << " = "
+                          << kernel.numWorkItems << std::endl;
                 std::cout << kernel.args;
             }
 
             std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
             hipFunction_t function = getKernel(kernel.kernelName);
             std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-
 
             void * kernelArgs = const_cast<void *>(kernel.args.data());
             size_t argsSize = kernel.args.size();
@@ -253,16 +255,17 @@ namespace Tensile
 
         void SolutionAdapter::launchKernels(std::vector<KernelInvocation> const& kernels)
         {
-            for(auto const& k: kernels) launchKernel(k);
+            for(auto const& k : kernels)
+                launchKernel(k);
         }
 
         void SolutionAdapter::launchKernels(std::vector<KernelInvocation> const& kernels,
-                                            hipStream_t stream,
-                                            hipEvent_t startEvent,
-                                            hipEvent_t stopEvent)
+                                            hipStream_t                          stream,
+                                            hipEvent_t                           startEvent,
+                                            hipEvent_t                           stopEvent)
         {
             auto first = kernels.begin();
-            auto last = kernels.end()-1;
+            auto last  = kernels.end() - 1;
 
             for(auto iter = kernels.begin(); iter != kernels.end(); iter++)
             {
@@ -272,21 +275,25 @@ namespace Tensile
                 if(iter == first)
                     kStart = startEvent;
                 if(iter == last)
-                    kStop  = stopEvent;
+                    kStop = stopEvent;
 
                 launchKernel(*iter, stream, kStart, kStop);
             }
         }
 
         void SolutionAdapter::launchKernels(std::vector<KernelInvocation> const& kernels,
-                                            hipStream_t stream,
-                                            std::vector<hipEvent_t> const& startEvents,
-                                            std::vector<hipEvent_t> const& stopEvents)
+                                            hipStream_t                          stream,
+                                            std::vector<hipEvent_t> const&       startEvents,
+                                            std::vector<hipEvent_t> const&       stopEvents)
         {
             if(kernels.size() != startEvents.size() || kernels.size() != stopEvents.size())
-                throw std::runtime_error(concatenate("Must have an equal number of kernels (", kernels.size(),
-                                                     "), start events (", startEvents.size(),
-                                                     "), and stop events. (", stopEvents.size(), ")"));
+                throw std::runtime_error(concatenate("Must have an equal number of kernels (",
+                                                     kernels.size(),
+                                                     "), start events (",
+                                                     startEvents.size(),
+                                                     "), and stop events. (",
+                                                     stopEvents.size(),
+                                                     ")"));
 
             for(size_t i = 0; i < kernels.size(); i++)
             {
@@ -294,26 +301,23 @@ namespace Tensile
             }
         }
 
-        std::ostream & operator<<(std::ostream & stream, SolutionAdapter const& adapter)
+        std::ostream& operator<<(std::ostream& stream, SolutionAdapter const& adapter)
         {
             stream << "hip::SolutionAdapter";
 
             if(adapter.m_debug)
             {
                 stream << "[" << std::endl;
-                for(auto const& name: adapter.m_loadedModuleNames)
+                for(auto const& name : adapter.m_loadedModuleNames)
                     stream << name << std::endl;
 
                 stream << "]";
             }
 
-            stream << " (" << adapter.name()
-                   << ", " << adapter.m_modules.size()
+            stream << " (" << adapter.name() << ", " << adapter.m_modules.size()
                    << " total modules)" << std::endl;
 
             return stream;
         }
-    }
-}
-
-
+    } // namespace hip
+} // namespace Tensile
