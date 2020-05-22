@@ -74,9 +74,10 @@ namespace Tensile
 
             void initKernel(std::string const& name);
 
+            hipFunction_t getKernel(std::string const& name);
         private:
 
-            hipFunction_t getKernel(std::string const& name);
+            //hipFunction_t getKernel(std::string const& name);
 
             std::mutex m_access;
 

@@ -32,6 +32,7 @@
 #include <Tensile/ContractionProblem_fwd.hpp>
 #include <Tensile/DataTypes.hpp>
 #include <Tensile/Predicates.hpp>
+#include <Tensile/hip/HipSolutionAdapter.hpp>
 
 namespace Tensile
 {
@@ -72,6 +73,11 @@ namespace Tensile
         virtual std::string description() const { return kernelName; }
 
         bool isSourceKernel() const;
+
+        void executeContraction(ContractionSolution::Problem  const& problem,
+                                ContractionSolution::Inputs   const& inputs,
+                                Hardware const& hardware,
+                                Tensile::hip::SolutionAdapter& adapter) const;
 
         //! Estimates based on problem size, solution tile, and  machine hardware charz:
         struct StaticPerformanceModel
@@ -120,8 +126,17 @@ namespace Tensile
                                                     Inputs   const& inputs,
                                                     Hardware const& hardware) const;
 
+        std::vector<KernelInvocation> solve1(Problem  const& problem,
+                                                    Inputs   const& inputs,
+                                                    Hardware const& hardware) const;
+
         template <typename TypedInputs>
         std::vector<KernelInvocation> solveTyped(Problem     const& problem,
+                                                 TypedInputs const& inputs,
+                                                 Hardware    const& hardware) const;
+
+        template <typename TypedInputs>
+        std::vector<KernelInvocation> solveTyped1(Problem     const& problem,
                                                  TypedInputs const& inputs,
                                                  Hardware    const& hardware) const;
 
@@ -131,7 +146,17 @@ namespace Tensile
                                             Hardware    const& hardware) const;
 
         template <typename TypedInputs>
+        KernelInvocation generateSingleCall1(Problem     const& problem,
+                                            TypedInputs const& inputs,
+                                            Hardware    const& hardware) const;
+
+        template <typename TypedInputs>
         KernelInvocation generateBetaOnlyCall(Problem     const& problem,
+                                              TypedInputs const& inputs,
+                                              Hardware    const& hardware) const;
+
+        template <typename TypedInputs>
+        KernelInvocation generateBetaOnlyCall1(Problem     const& problem,
                                               TypedInputs const& inputs,
                                               Hardware    const& hardware) const;
 

@@ -29,6 +29,7 @@
 
 #include <Tensile/DataTypes.hpp>
 #include <Tensile/Macros.hpp>
+#include <Tensile/Tensile-tp.hpp>
 
 namespace Tensile
 {
@@ -154,6 +155,14 @@ namespace Tensile
     template <typename T>
     inline void KernelArguments::append(std::string const& name, T value, bool bound)
     {
+
+/*        std::chrono::high_resolution_clock::time_point t1;
+        std::chrono::high_resolution_clock::time_point t2;
+        std::chrono::high_resolution_clock::time_point t3;
+        std::chrono::high_resolution_clock::time_point t4;
+
+        t1 = std::chrono::high_resolution_clock::now();
+*/
         alignTo(alignof(T));
 
         size_t offset = m_data.size();
@@ -164,9 +173,21 @@ namespace Tensile
             std::string valueString = stringForValue(value, bound);
             appendRecord(name, Arg(offset, size, bound, valueString));
         }
-
+ 
+        //t2 = std::chrono::high_resolution_clock::now();
         m_data.insert(m_data.end(), sizeof(value), 0);
+        //t3 = std::chrono::high_resolution_clock::now();
         writeValue(offset, value);
+        //t4 = std::chrono::high_resolution_clock::now();
+
+        //std::chrono::duration<double> ts1 = t2 - t1;
+        //std::chrono::duration<double> ts2 = t4 - t3;
+        //std::chrono::duration<double> ts3 = t4 - t1;
+
+        //tracepoint(tensile_tracing, trace_time, ts1.count(), "KernelArguments::append insert");
+        //tracepoint(tensile_tracing, trace_time, ts2.count(), "KernelArguments::append writeValue");
+        //tracepoint(tensile_tracing, trace_time, ts3.count(), "KernelArguments::append complete");
+
     }
 
     template <typename T>
