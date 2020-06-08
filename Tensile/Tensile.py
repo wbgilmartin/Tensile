@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (C) 2016-2019 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright 2016-2020 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -97,6 +97,15 @@ def Tensile(userArgs):
   print1("#")
   print1("#  Tensile v%s" % (__version__) )
 
+  def splitExtraParameters(par):
+    """
+    Allows the --global-parameters option to specify any parameters from the command line.
+    """
+
+    (key, value) = par.split("=")
+    value = eval(value)
+    return (key, value)
+
   # setup argument parser
   argParser = argparse.ArgumentParser()
   argParser.add_argument("config_file", \
@@ -125,12 +134,10 @@ def Tensile(userArgs):
       action="store", default="hcc", help="select which compiler to use")
   argParser.add_argument("--client-build-path", default=None)
   argParser.add_argument("--client-lock", default=None)
+
+  argParser.add_argument("--global-parameters", nargs="+", type=splitExtraParameters, default=[])
   # argParser.add_argument("--hcc-version", dest="HccVersion", \
   #     help="This can affect what opcodes are emitted by the assembler")
-
-  print1("# Restoring default globalParameters")
-  for key in defaultGlobalParameters:
-    globalParameters[key] = defaultGlobalParameters[key]
 
   # parse arguments
   args = argParser.parse_args(userArgs)
@@ -141,6 +148,13 @@ def Tensile(userArgs):
   print1("#")
   print1(HR)
   print1("")
+
+  print1("# Restoring default globalParameters")
+  for key in defaultGlobalParameters:
+    if args.CxxCompiler:
+      globalParameters['CxxCompiler'] = args.CxxCompiler
+    else:
+      globalParameters[key] = defaultGlobalParameters[key]
 
   # read config
   config = YAMLIO.readConfig( configPath )
@@ -181,11 +195,20 @@ def Tensile(userArgs):
     globalParameters["MergeFiles"] = False
   if args.CxxCompiler:
     globalParameters['CxxCompiler'] = args.CxxCompiler
+    if globalParameters['CxxCompiler'] == "hipcc" and not args.CodeObjectVersion:
+      globalParameters["CodeObjectVersion"] = "V3"
   print1("")
   if args.client_build_path:
     globalParameters["ClientBuildPath"] = args.client_build_path
   if args.client_lock:
     globalParameters["ClientExecutionLockPath"] = args.client_lock
+
+  for key, value in args.global_parameters:
+    print("Overriding {0}={1}".format(key, value))
+    globalParameters[key] = value
+
+  #globalParameters["NewClient"] = 2
+  #globalParameters["PrintCodeCommands"] = True
 
   # Execute Steps in the config script
   executeStepsInConfig( config )

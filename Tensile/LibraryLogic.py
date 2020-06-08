@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (C) 2016-2019 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright 2016-2020 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,8 @@ def analyzeProblemType( problemType, problemSizeGroups, inputParameters ):
   solutionsList = []
   problemSizesList = []
   dataFileNameList = []
+  selectionFileNameList = []
+
   for problemSizeGroup in problemSizeGroups:
     problemSizes = problemSizeGroup[0]
     dataFileName = problemSizeGroup[1]
@@ -50,6 +52,9 @@ def analyzeProblemType( problemType, problemSizeGroups, inputParameters ):
     #print "  problemSizes:", problemSizes
     #print "# DataFileName:", dataFileName
     #print "  solutionsFileName:", solutionsFileName
+    if enableTileSelection:
+      selectionFileName = problemSizeGroup[3]
+      selectionFileNameList.append(selectionFileName)
 
     ######################################
     # Read Solutions
@@ -71,6 +76,11 @@ def analyzeProblemType( problemType, problemSizeGroups, inputParameters ):
   # Create Logic Analyzer
   logicAnalyzer = LogicAnalyzer( problemType, problemSizesList, solutionsList, \
       dataFileNameList, inputParameters)
+
+  selectionSolutionsIdsList = None
+  selectionSolutions = None
+
+  validSelectionSolutions = []
 
   ######################################
   # Remove invalid solutions
@@ -102,49 +112,38 @@ def analyzeProblemType( problemType, problemSizeGroups, inputParameters ):
       line += "\n"
     print(line)
 
-  ######################################
-  # Print solutions used
-  print1("# Solutions Used:")
-  for i in range(0, len(logicAnalyzer.solutions)):
-    s = logicAnalyzer.solutions[i]
-    s["SolutionIndex"] = i
-    s["SolutionNameMin"] = Solution.getNameMin(s, solutionMinNaming)
-    print1("(%2u) %s : %s" % (i, \
-        Solution.getNameMin(s, solutionMinNaming), \
-        Solution.getNameFull(s)))  # this is the right name
-
-  selectionSolutionsIdsList = None 
-  selectionSolutions = None
   if enableTileSelection:
-    validSelectionSolutions = SolutionSelectionLibrary.analyzeSolutionSelection(problemType, problemSizeGroups)
-  
+    if globalParameters["NewClient"] == 2:
+      validSelectionSolutions = SolutionSelectionLibrary.analyzeSolutionSelection(problemType, selectionFileNameList, \
+          logicAnalyzer.numSolutionsPerGroup,  logicAnalyzer.solutionGroupMap, solutionsList)
+    else:
+      validSelectionSolutions = SolutionSelectionLibrary.analyzeSolutionSelectionOldClient(problemType, problemSizeGroups)
+
     validSelectionSolutionsIncluded = []
     validSelectionSolutionsRemainder = []
+    selectionSolutionsIds = set([])
     for validSelectionSolution in validSelectionSolutions:
-      (validSolutionName, validSolution, validSolutionInfo) = validSelectionSolution
+      (validSolution, validSolutionInfo) = validSelectionSolution
       if validSolution in logicAnalyzer.solutions:
         validExactSolutionIndex = logicAnalyzer.solutions.index(validSolution)
+        selectionSolutionsIds.add(validExactSolutionIndex)
         validExactSolution = logicAnalyzer.solutions[validExactSolutionIndex]
-        validSelectionSolutionsIncluded.append((validSolutionName, validExactSolution, validSolutionInfo))
+        validSelectionSolutionsIncluded.append((validExactSolution, validSolutionInfo))
       else:
         validSelectionSolutionsRemainder.append(validSelectionSolution)
 
     selectionSolutions = []
-    selectionSolutionsIds = set([])
     for i in range(0 ,len(validSelectionSolutionsIncluded)):
       validSelectionSolution = validSelectionSolutionsIncluded[i]
-      (validSolutionName, validSolution, validSolutionInfo) = validSelectionSolution
+      (validSolution, validSolutionInfo) = validSelectionSolution
       validSolution["Ideals"] = validSolutionInfo
-      selectionSolutionsIds.add(validSolution["SolutionIndex"])
-      #selectionSolutions.append(validSolution)
 
     solutionsStartIndex = len(logicAnalyzer.solutions)
 
     for i in range(0, len(validSelectionSolutionsRemainder)):
       validSelectionSolution = validSelectionSolutionsRemainder[i]
-      (validSolutionName, validSolution, validSolutionInfo) = validSelectionSolution
+      (validSolution, validSolutionInfo) = validSelectionSolution
       selectionSolutionIndex = solutionsStartIndex + i
-      validSolution["SolutionIndex"] = selectionSolutionIndex
       selectionSolutionsIds.add(selectionSolutionIndex)
       validSolution["SolutionNameMin"] = Solution.getNameMin(validSolution, solutionMinNaming)
       validSolution["Ideals"] = validSolutionInfo
@@ -290,7 +289,7 @@ class LogicAnalyzer:
       self.rangeProblemSizes.update([tuple(problem.sizes) for problem in problemSizes.problems])
       for rangeSize in problemSizes.ranges:
 
-        if globalParameters["ExpandRanges"]: 
+        if globalParameters["ExpandRanges"]:
           # Treat ranges as pile of exacts:
           for rsize in rangeSize.problemSizes:
             self.exactProblemSizes.add(tuple(rsize))
@@ -506,7 +505,7 @@ class LogicAnalyzer:
   # one at a time.  Stop when leastImportantSolution indicates no more
   # solutions can be removed, which appears to be when the solution
   # is used by an exact problem or is the only possible solution for some
-  # problem or doesn't improve the a solution by > SolutionImportanceMin% 
+  # problem or doesn't improve the a solution by > SolutionImportanceMin%
   ##############################################################################
   def removeLeastImportantSolutions(self):
     # Remove least important solutions
@@ -980,7 +979,7 @@ class LogicAnalyzer:
           winnerIdx = solutionIdx
           winnerGFlops = solutionGFlops
         elif solutionGFlops > secondGFlops:
-          secondGFlops = solutionGFlops 
+          secondGFlops = solutionGFlops
 
       winnerTimeMs = totalFlops / winnerGFlops / 1000000.0
       secondTimeMs = totalFlops / secondGFlops / 1000000.0
@@ -1077,7 +1076,7 @@ class LogicAnalyzer:
 
 
   ##############################################################################
-  # Prune a list of solutions, keeping only the indices specified in 
+  # Prune a list of solutions, keeping only the indices specified in
   # keepSolutions.  keepSolutions is a set not a list
   ##############################################################################
   def pruneSolutions(self, keepSolutions):

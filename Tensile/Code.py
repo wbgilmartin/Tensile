@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (C) 2016-2019 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright 2016-2020 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -49,8 +49,9 @@ class Module(Item):
   make intelligent and legal transformations.
   """
   def __init__(self, name=""):
-    self.name = name
+    self.name     = name
     self.itemList = []
+    self.tempVgpr = None
 
   def findNamedItem(self, targetName):
     return next((item for item in self.itemList if item.name==targetName), None)
@@ -162,7 +163,7 @@ class Module(Item):
       else:
         flatitems.append(i)
     return flatitems
-   
+
   def addTempVgpr(self, vgpr):
     self.tempVgpr = vgpr
 
@@ -201,6 +202,7 @@ class TextBlock(Item):
   def __init__(self,text):
     assert(isinstance(text, str))
     self.text = text
+    self.name = text
 
   def __str__(self):
     return self.text
@@ -233,8 +235,8 @@ class WaitCnt (Module):
   Construct a waitcnt from specified lgkmcnt and vmcnt:
   lgkmcnt, vmcnt:
     if -1 then will not be added to the wait term.
-  
-  If lgkmcnt=vmcnt= -1 then the waitcnt is a nop and 
+
+  If lgkmcnt=vmcnt= -1 then the waitcnt is a nop and
   an instruction with a comment is returned.
   """
   def __init__(self, version,lgkmcnt=-1,vmcnt=-1,comment=""):
@@ -318,7 +320,7 @@ class  MFMAInst (Inst):
       numOfDstRgs = (self.kernel["MatrixInstN"] * self.kernel["MatrixInstM"] * self.kernel["MatrixInstB"] // globalParameters["WavefrontWidth"])
       if self.kernel["ProblemType"]["DataType"].isSingle():
         for iui in range(0, self.innerUnroll):
-           cStr = "a[(%u+%u*%u)*%u):((((%u+%u*%u)*%u)+%u)-1)]" % (self.aIdx,self.bIdx,numOfRowInsts,numOfDstRgs,self.aIdx,numOfDstRgs,self.bIdx,numOfRowInsts,numOfDstRgs,numOfDstRgs)
+           cStr = "a[(%u+%u*%u)*%u):((((%u+%u*%u)*%u)+%u)-1)]" % (self.aIdx,self.bIdx,numOfRowInsts,numOfDstRgs,self.aIdx,numOfDstRgs,self.bIdx,numOfRowInsts,numOfDstRgs)
            aStr = "v[%s+%u]" \
                % ("vgprValuA_X%u_I%u"%(self.PLR,iui), self.aIdx)
            bStr = "v[%s+%u]" \
@@ -675,7 +677,7 @@ class SrdUpperFields1010(BitfieldStructure):
     return cls(format         = 4,
                resource_level = 1,
                oob_select     = 3)
-    
+
 class SrdUpperValue1010(BitfieldUnion):
   _fields_ = [("fields", SrdUpperFields1010), ("value", ctypes.c_uint32)]
 

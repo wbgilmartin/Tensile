@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (C) 2016-2019 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright 2016-2020 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,7 @@ from .ClientWriter import runClient, writeClientParameters, writeClientConfig
 from .Common import globalParameters, HR, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime
 from .KernelWriterAssembly import KernelWriterAssembly
 from .KernelWriterSource import KernelWriterSource
-from .SolutionStructs import Solution, ProblemType
+from .SolutionStructs import Solution, ProblemType, ProblemSizes
 from .SolutionWriter import SolutionWriter
 from .TensileCreateLibrary import writeSolutionsAndKernels, writeCMake
 
@@ -112,7 +112,6 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
       print1(printStr)
 
     if False:
-    # print1(hardcoded parameters and their winners
       print1("# HardcodedParameters | WinningParameters:")
       paramDictIdx = 0
       hardcodedMinNaming = \
@@ -284,12 +283,12 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
         solution = solutionsForHardcoded[j]
         if solutionList.count(solution) == 0:
           removeSolutions[i].append(solution)
-    
+
     for i in range(0, len(solutions)):
       solutionsForHardcoded = solutions[i]
       for j in range(0, len(removeSolutions[i])):
           solutionsForHardcoded.remove(removeSolutions[i][j])
-    
+
     # remove hardcoded that don't have any valid benchmarks
     removeHardcoded = []
     for hardcodedIdx in range(0, numHardcoded):
@@ -299,7 +298,7 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
     removesExist = len(removeHardcoded) > 0
     for hardcodedParam in removeHardcoded:
       benchmarkStep.hardcodedParameters.remove(hardcodedParam)
-    
+
     if removesExist:
       print1("# Updating winners since kernelwriter removed unused hardcoded solutions.  removeHardcoded=%u winners=%u" %(len(removeHardcoded), len(winners.winners)))
       winners.wpdUpdate( benchmarkStep.hardcodedParameters )
@@ -354,10 +353,11 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
     ############################################################################
     # Winners -> Determined Parameters
     ############################################################################
-    results = getResults(resultsFileName, solutions, enableTileSelection, newResultsFileName)
-    print2("CSV Results: %s" % results)
-    winners.addResults(benchmarkStep.hardcodedParameters, \
-        benchmarkPermutations, solutions, results)
+    if not enableTileSelection:
+        results = getResults(resultsFileName, solutions, enableTileSelection, newResultsFileName)
+        print2("CSV Results: %s" % results)
+        winners.addResults(benchmarkStep.hardcodedParameters, \
+            benchmarkPermutations, solutions, results)
 
     ############################################################################
     # Write Solutions YAML
@@ -528,7 +528,31 @@ def writeBenchmarkFiles(stepBaseDir, solutions, problemSizes, stepName, filesToC
 
   codeObjectFiles = [os.path.relpath(f, globalParameters["WorkingPath"]) for f in codeObjectFiles]
 
-  writeClientConfig(True, solutions, problemSizes, stepName, stepBaseDir, newLibrary, codeObjectFiles)
+  writeClientConfig(True, solutions, problemSizes, stepName, stepBaseDir, newLibrary, codeObjectFiles, False)
+
+  if "TileAwareSelection" in problemType and problemType["TileAwareSelection"]:
+    maxMacroTile0 = 0
+    maxMacroTile1 = 0
+    for solution in solutions:
+      macroTile0 = solution["MacroTile0"]
+      macroTile1 = solution["MacroTile1"]
+      if macroTile0 > maxMacroTile0:
+        maxMacroTile0 = macroTile0
+      if macroTile1 > maxMacroTile1:
+        maxMacroTile1 = macroTile1
+    idealM = 36 * maxMacroTile0
+    idealN = 36 * maxMacroTile1
+    idealSizes = []
+    if problemType["Batched"]:
+        for idealK in solutionSummationSizes:
+          idealSize = {"Exact": [idealM, idealN, 1, idealK]}
+          idealSizes.append(idealSize)
+    else:
+        for idealK in solutionSummationSizes:
+          idealSize = {"Exact": [idealM, idealN, idealK]}
+          idealSizes.append(idealSize)
+    idealProblemSizes = ProblemSizes(problemType, idealSizes)
+    writeClientConfig(True, solutions, idealProblemSizes, stepName, stepBaseDir, newLibrary, codeObjectFiles, True)
 
   if len(solutions) == 0:
     printExit("write solutions and kernels results 0 valid soultion.")
@@ -540,9 +564,10 @@ def writeBenchmarkFiles(stepBaseDir, solutions, problemSizes, stepName, filesToC
   writeCMake(globalParameters["WorkingPath"], solutions, kernels, filesToCopy, \
       clientName)
 
-  forBenchmark = True
-  writeClientParameters(forBenchmark, solutions, problemSizes, stepName, \
-      filesToCopy, stepBaseDir, solutionSummationSizes, solutionWriter)
+  if globalParameters["NewClient"] != 2:
+      forBenchmark = True
+      writeClientParameters(forBenchmark, solutions, problemSizes, stepName, \
+          filesToCopy, stepBaseDir, solutionSummationSizes, solutionWriter)
 
 
 ################################################################################
@@ -592,16 +617,16 @@ class WinningParameterDict:
   def addResults( self, hardcodedParameterList, benchmarkPermutations, \
       solutions, results):
     print1("# Adding Results to Solution Database")
-    for hardcodedIdx,hardcodedResults in enumerate(Utils.tqdm(results)):
+    for hardcodedIdx,hardcodedResults in Utils.tqdm(enumerate(results)):
       if not hardcodedResults: continue
-      
+
       hardcodedParameters = hardcodedParameterList[hardcodedIdx]
       winningIdx = -1
       winningScore = -9999 # -1 is score of invalid so use -9999 here
       # find fastest benchmark parameters for this hardcoded
       for benchmarkIdx,benchmarkResult in enumerate(hardcodedResults):
         if not benchmarkResult: continue
-        
+
         benchmarkScore = max(benchmarkResult) # take fastest regardless of size
         if benchmarkScore > winningScore:
           winningScore = benchmarkScore
@@ -692,7 +717,7 @@ class WinningParameterDict:
   #       0 : parameters
   #       1 : score
   #  - lookupHardcodedParameters is a dict of hard-coded parms, ie "BufferLoad: True"
-  #  - Return a list of matches - 
+  #  - Return a list of matches -
   # need to match MacroTile also
   @staticmethod
   def get( lookupHardcodedParameters, winners ):

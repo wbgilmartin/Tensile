@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright (C) 2016-2020 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright 2016-2020 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -56,7 +56,9 @@ globalParameters["KernelTime"] = False            # T=use device timers, F=use h
 globalParameters["PreciseKernelTime"] = True     # T=On hip, use the timestamps for kernel start and stop rather than separate events.  Can provide more accurate kernel timing.  For GlobalSplitU kernels, recommend disabling this to provide consistent
 # timing between GSU / non-GSU kernels
 globalParameters["CodeFromFiles"] = True          # if False byte arrays will be generated during Benchmarking phase as before
+globalParameters["SortProblems"] = False          # sort problems by size; else use order in YAML file
 globalParameters["PinClocks"] = False             # T=pin gpu clocks and fan, F=don't
+globalParameters["HardwareMonitor"] = True        # False: disable benchmarking client monitoring clocks using rocm-smi.
 globalParameters["NumBenchmarks"] = 1             # how many benchmark data points to collect per problem/solution
 globalParameters["SyncsPerBenchmark"] = 1         # how iterations of the stream synchronization for-loop to do per benchmark data point
 globalParameters["EnqueuesPerSync"] = 1           # how many solution enqueues to perform per synchronization
@@ -138,7 +140,7 @@ globalParameters["PrintTensorRef"] = 0          # Print reference tensor.  0x1=a
 globalParameters["PrintIndexAssignments"] = 0      # Print the tensor index assignment info
 globalParameters["PrintTensorRef"] = 0          # Print reference tensor.  0x1=after init; 0x2=after copy-back; 0x3=both
 globalParameters["PrintWinnersOnly"] = False      # Only print the solutions which become the fastest
-globalParameters["PrintCodeCommands"] = False  # print the commands used to generate the code objects (asm,link,hcc, etc)
+globalParameters["PrintCodeCommands"] = False  # print the commands used to generate the code objects (asm,link,hip-clang, etc)
 
 # TODO - remove this when NewClient is mainstream
 globalParameters["OldClientSourceTmp"] = True      # Use an intermediate sourceTmp dir to detect file changes and minimize rebuilds on old client
@@ -159,7 +161,7 @@ globalParameters["MaxDepthU"] = 256               # max DepthU value to allow
 globalParameters["ShortNames"] = False            # on windows kernel names can get too long; =True will convert solution/kernel names to serial ids
 globalParameters["MergeFiles"] = True             # F=store every solution and kernel in separate file; T=store all solutions in single file
 globalParameters["MaxFileName"] = 128 # If a file name would be longer than this, shorten it with a hash.
-globalParameters["SupportedISA"] = [(8,0,3), (9,0,0), (9,0,6), (9,0,8), (10,1,0)]             # assembly kernels writer supports these architectures
+globalParameters["SupportedISA"] = [(8,0,3), (9,0,0), (9,0,6), (9,0,8), (10,1,0), (10,1,1)]             # assembly kernels writer supports these architectures
 globalParameters["ClientBuildPath"] = "0_Build"                   # subdirectory for host code build directory.
 globalParameters["NewClient"] = 1                                 # 1=Run old+new client, 2=run new client only (All In)
 globalParameters["BenchmarkProblemsPath"] = "1_BenchmarkProblems" # subdirectory for benchmarking phases
@@ -173,11 +175,12 @@ globalParameters["ClientExecutionLockPath"] = None # Path for a file lock to ens
 globalParameters["CurrentISA"] = (0,0,0)
 globalParameters["ROCmAgentEnumeratorPath"] = None      # /opt/rocm/bin/rocm_agent_enumerator
 globalParameters["ROCmSMIPath"] = None                  # /opt/rocm/bin/rocm-smi
-globalParameters["AssemblerPath"] = None                # /opt/rocm/bin/hcc
+globalParameters["AssemblerPath"] = None                # /opt/rocm/hip/bin/hipcc
 globalParameters["WorkingPath"] = os.getcwd()           # path where tensile called from
 globalParameters["IndexChars"] =  "IJKLMNOPQRSTUVWXYZ"  # which characters to use for C[ij]=Sum[k] A[ik]*B[jk]
 globalParameters["ScriptPath"] = os.path.dirname(os.path.realpath(__file__))            # path to Tensile/Tensile.py
 globalParameters["SourcePath"] = os.path.join(globalParameters["ScriptPath"], "Source") # path to Tensile/Source/
+globalParameters["HipClangVersion"] = "0,0,0"
 globalParameters["HccVersion"] = "0,0,0"
 
 # default runtime is selected based on operating system, user can override
@@ -269,6 +272,13 @@ validParameters = {
     "GlobalReadCoalesceVectorA":  [        True ], # FIXME =False worked before the vector refactor; fixing requires re-ordering load/store indices; but they aren't the faster option so not worth time right now
     "GlobalReadCoalesceVectorB":  [        True ],
 
+    # original global read to lds is interlace, [w0,w1,w2,w3,w0,w1,w2,w3,w0,w1,w2,w3,w0,w1,w2,w3]
+    # when WaveSeparateGlobalRead is enabled, LDS is divided to number of waves part.
+    # each wave load a block memory to lds,     [w0,w0,w0,w0,w1,w1,w1,w1,w2,w2,w2,w2,w3,w3,w3,w3]
+    # -1 is selected by logic, 0 disable, 1 enable.
+    "WaveSeparateGlobalReadA":    [ 0, 1 ],
+    "WaveSeparateGlobalReadB":    [ 0, 1 ],
+
     "PrefetchGlobalRead":         [ False, True ], # prefetch / double-buffer reads from global memory -> vgprs -> lds. Requires 2X LDS space, and VGPRs for buffering data on way into LDS
     "PrefetchLocalRead":          [ 0,1,2,3], # prefetch / double-buffer reads from lds (or 2 for triple-buffer, 3 for quad-buffer).  Increases size of ValuA/ValuB registers.
 
@@ -321,7 +331,7 @@ validParameters = {
     # Scheduling algorithm to use for each iteration:
     # 0 = minimal/no scheduling.  Global Read and increments, followed by local reads,
     # followed by local writes, followed by MACs
-    "ScheduleIterAlg":             [0, 1, 2],
+    "ScheduleIterAlg":             [0, 1, 2, 3],
 
     # LDD Support
     # Allow LDD and StrideD to != LDC and StrideC for LDD <= LDC and LDD == M
@@ -355,7 +365,7 @@ validParameters = {
     # G2L registers used to stage data.  Also replaces the
     # local write offset with an SGPR.
     # For an 8x8 TT with PrefetchGlobalRead=1 this can save 33 VGPRs.
-    #    - Requirements for DirectToLds=1: 
+    #    - Requirements for DirectToLds=1:
     #      GlobalLoadVectorWidth? = 1
     #      TransposeLDS = 1 for TLU=0 case
     "DirectToLds":                [ False, True ],
@@ -494,6 +504,9 @@ validParameters = {
 
     "AssertStrideBEqual":  -1,
 
+    "AssertStrideCEqual":  -1,
+    "AssertStrideDEqual":  -1,
+
     # Assertions that require stride to be specified value.
     # Dictionary of pairs of {index, constValue}.
     # Index is a member of the global index assignments.
@@ -545,7 +558,7 @@ validParameters = {
     # 0: Use wg0
     # 1: Use wg1
     # 2: Use wg2
-    # 3: Use wgSerial, wgSerial = wg0 + (wg1 % WorkGroupMapping) * nwg0
+    # 3: Use wgSerial, wgSerial = wg0 + wg1 * nwg0 + wg2 * (nwg0 * nwg1)
     # 4: Debug mode, offset each tile max allowed StaggerU.  This just moves hotspot
     #    to a different bank since all workgroups still start at same point.
     "StaggerUMapping":       [0,1,2,3,4],
@@ -596,6 +609,31 @@ validParameters = {
     # XDLOPS tile definition, only valid for gfx908
     # If empty, do not use these instructions
     "MatrixInstruction":          validMatrixInstructions,
+
+    # StoreRemap: Optimize MatrixInstruction store patterns to enhance performance.
+    #             MI output data between each threads are along N dims.
+    #             But global memory is along M dim continous.
+    #             That mean global write between each threads are not continous.
+    #             Therefore, store performance for MI instruction is poor.
+    # How StoreRemap works in final store stage:
+    #             1. Put all thread output data into LDS.
+    #             2. All thread read data from LDS along M dims.
+    #                (match global Memory continous direction)
+    #             3. All thread write out data into global memory.
+    # 0:   Disable StoreRemap (default)
+    # 1~8: Enable StoreRemap and set the global write vector width
+    # Suggest optimum value: fp32 = [2,4], fp16 or bf16 = [4,8] (dwordx2 and dowrdx4)
+    "StoreRemapVectorWidth":      [0,1,2,4,8],
+
+    # Disable overlapping AB-tile vgpr and read/write addr vgprs with C-tile vgprs
+    # Valid only for MatrixInstruction enabled kernels, which by default overlaps
+    # C-tile w/ AB-tile until it's due for v_accvgpr_read before the writeback. Illustrated below:
+    # |<----------------------- valuC ----------------------->|
+    # |<--- valuA/B --->|<-- R/W pointers -->|xxx|<- Spares ->|
+    #                                          ^        ^
+    #         (Reserved by persistent kernels) ^        ^
+    #                       (Utilized by register pool) ^
+    "DisableVgprOverlapping":     [False, True],
 
     # If positive, each switch includes switches <= the specified switch.
     # For example 3 will enable NoPostLoop+NoGlobalRead+NoLocalWrite
@@ -738,7 +776,9 @@ validParameters = {
     # Padding boundary for LDS. defines block-size for pad insertion. for every 'LdsBlockSizePerPad' bytes, LDS padding (pad value from LdsPad parameter)
     # is added (readOffset aware of the pad and adjusts offset value based on this parameter value).good rule of thumb is LdsBlockSizePerPad >= unrollDepth * BPE
     # optimized value is 128
-    "LdsBlockSizePerPad":          [-1, 64, 128, 256],
+    # 0 means disable LdsBlockSizePerPad,
+    # -1 means value is determined by Tensile logic
+    "LdsBlockSizePerPad":          [-1, 0, 64, 128, 256],
 
     #Transpose LDS format. Local store in Coalsced dimension , same as optimized global fetch dimension . applicable only in TLU=0 case for miSIMD(s)
     "TransposeLDS":                [-1, 1, 0],
@@ -804,7 +844,7 @@ defaultBenchmarkCommonParameters = [
     {"KernelLanguage":            [ "Source" ] },
     {"LdsPadA":                   [ 0 ] },
     {"LdsPadB":                   [ 0 ] },
-    {"LdsBlockSizePerPad":        [ -1 ] },
+    {"LdsBlockSizePerPad":        [ 0 ] },
     {"TransposeLDS":              [ 0 ] },
     {"MaxOccupancy":              [ 40 ] },
     {"VectorWidth":               [ -1 ] },
@@ -814,6 +854,8 @@ defaultBenchmarkCommonParameters = [
     {"LocalReadVectorWidth":      [ -1 ] },
     {"GlobalReadCoalesceVectorA": [ True ] },
     {"GlobalReadCoalesceVectorB": [ True ] },
+    {"WaveSeparateGlobalReadA":    [ 0 ] },
+    {"WaveSeparateGlobalReadB":    [ 0 ] },
     {"GlobalReadCoalesceGroupA":  [ True ] },
     {"GlobalReadCoalesceGroupB":  [ True ] },
     {"PrefetchGlobalRead":        [ True ] },
@@ -848,6 +890,8 @@ defaultBenchmarkCommonParameters = [
     {"AssertMinApproxSize":        [ -1 ] },
     {"AssertStrideAEqual":        [ {} ] },
     {"AssertStrideBEqual":        [ {} ] },
+    {"AssertStrideCEqual":        [ {} ] },
+    {"AssertStrideDEqual":        [ {} ] },
     {"AssertSizeEqual":           [ {} ] },
     {"CheckTensorDimAsserts"      : [ False ] },
     {"CheckDimOverflow"           : [ 0 ] },
@@ -878,6 +922,7 @@ defaultBenchmarkCommonParameters = [
     {"WorkGroupMapping":          [ 8 ] },
     {"ThreadTile":                [ [4,4] ] },
     {"MatrixInstruction":         [ [] ] },
+    {"DisableVgprOverlapping":    [ False ] },
     {"DisableAtomicFail":         [ 0 ] },
     {"DisableKernelPieces":       [ 0 ] },
     {"DepthU":                    [ -1 ] },
@@ -890,6 +935,7 @@ defaultBenchmarkCommonParameters = [
     {"ReplacementKernel":         [ False ] },
     {"MinVgprNumber":             [0]},
     {"MaxVgprNumber":             [256]},
+    {"StoreRemapVectorWidth":     [ 0 ] },
     ]
 # benchmark these solution independently
 defaultForkParameters = []
@@ -1009,8 +1055,19 @@ defaultProblemType = {
     "IndexAssignmentsA":        [0, 2],
     "IndexAssignmentsB":        [1, 2],
     "NumIndicesC":              2,
-    "UseInitialStridesAB":      False,  # use initial strides for AB.
-    "UseInitialStridesCD":      False,  # use initial strides for CD. Only supported on Source path.
+
+    # use initial strides for AB.
+    # This has some performance impact for the increased flexibility:
+    #   - Additional strides will be passed into the kernel and will occupy SGPR registers
+    #   - GlobalReadWidth must be 1 (since elements are not guaranteed to be adjacent in memory)
+    "UseInitialStridesAB":      False,
+
+    # use initial strides for CD.
+    # This has some performance impact for the increased flexibility:
+    #   - Additional strides will be passed into the kernel and will occupy SGPR registers
+    #   - Additional multiply on the store address path
+    #   -VectorStore must be 0.  If VectorStore is -1, it will be silently set to 0 internally.
+    "UseInitialStridesCD":      False,
 
     "AllowNoFreeDims":          False,  # allow A or B to specify no free dims
                                         # (if false, A and B must have at least one free dim)
@@ -1177,11 +1234,11 @@ def printExit(message):
 
 ################################################################################
 # Locate Executables
-# rocm-smi, hcc, rocm_agent_enumerator
+# rocm-smi, hip-clang, rocm_agent_enumerator
 ################################################################################
 def isExe( filePath ):
   return os.path.isfile(filePath) and os.access(filePath, os.X_OK)
-def locateExe( defaultPath, exeName ): # /opt/rocm/bin, hcc
+def locateExe( defaultPath, exeName ): # /opt/rocm/bin, hip-clang
   # look in path first
   for path in os.environ["PATH"].split(os.pathsep):
     exePath = os.path.join(path, exeName)
@@ -1196,13 +1253,18 @@ def locateExe( defaultPath, exeName ): # /opt/rocm/bin, hcc
 def GetAsmCaps(isaVersion):
   """ Determine assembler capabilities by testing short instructions sequences """
   rv = {}
-  rv["SupportedISA"] = tryAssembler(isaVersion, "", "")
-  rv["HasExplicitCO"] = tryAssembler(isaVersion, "", "v_add_co_u32 v0,vcc,v0,1")
-  rv["HasExplicitNC"] = tryAssembler(isaVersion, "", "v_add_nc_u32 v0,v0,1")
-  rv["HasDirectToLds"] = tryAssembler(isaVersion, "", "buffer_load_dword v40, v36, s[24:27], s28 offen offset:0 lds")
-  rv["HasAddLshl"] = tryAssembler(isaVersion, "", "v_add_lshl_u32 v47, v36, v34, 0x2")
-  rv["HasSMulHi"] = tryAssembler(isaVersion, "", "s_mul_hi_u32 s47, s36, s34")
+  rv["SupportedISA"]    = tryAssembler(isaVersion, "", "")
+  rv["HasExplicitCO"]   = tryAssembler(isaVersion, "", "v_add_co_u32 v0,vcc,v0,1")
+  rv["HasExplicitNC"]   = tryAssembler(isaVersion, "", "v_add_nc_u32 v0,v0,1")
+  rv["HasDirectToLds"]  = tryAssembler(isaVersion, "", "buffer_load_dword v40, v36, s[24:27], s28 offen offset:0 lds")
+  rv["HasAddLshl"]      = tryAssembler(isaVersion, "", "v_add_lshl_u32 v47, v36, v34, 0x2")
+  rv["HasSMulHi"]       = tryAssembler(isaVersion, "", "s_mul_hi_u32 s47, s36, s34")
   rv["HasCodeObjectV3"] = tryAssembler(isaVersion, "-mno-code-object-v3", "")
+
+  rv["v_fma_f16"]       = tryAssembler(isaVersion, "", "v_fma_f16 v47, v36, v34, v47, op_sel:[0,0,0,0]")
+  rv["v_pk_fma_f16"]    = tryAssembler(isaVersion, "", "v_pk_fma_f16 v47, v36, v34, v47, op_sel:[0,0,0]")
+  rv["v_mad_mix_f32"]   = tryAssembler(isaVersion, "", "v_mad_mix_f32 v47, v36, v34, v47, op_sel:[0,0,0] op_sel_hi:[1,1,0]")
+
   if tryAssembler(isaVersion, "", "s_waitcnt vmcnt(63)"):
     rv["MaxVmcnt"] = 63
   elif tryAssembler(isaVersion, "", "s_waitcnt vmcnt(15)"):
@@ -1210,26 +1272,29 @@ def GetAsmCaps(isaVersion):
   else:
     rv["MaxVmcnt"] = 0
 
-  rv["SupportedSource"] = (isaVersion != (10,1,0))
+  rv["SupportedSource"] = True
+
+  if globalParameters["CxxCompiler"] == "hcc" and isaVersion[0] == 10:
+    rv["SupportedISA"] = 0
 
   return rv
 
 def GetArchCaps(isaVersion):
   rv = {}
-  rv["HasEccHalf"]     = (isaVersion==(9,0,6) or isaVersion==(9,0,8))
+  rv["HasEccHalf"]       = (isaVersion==(9,0,6) or isaVersion==(9,0,8))
   rv["Waitcnt0Disabled"] = isaVersion == (9,0,8)
-  rv["SeparateVscnt"]  = isaVersion == (10,1,0)
-  rv["CMPXWritesSGPR"] = isaVersion != (10,1,0)
-  rv["HasWave32"]      = isaVersion == (10,1,0)
+  rv["SeparateVscnt"]    = isaVersion[0] == 10
+  rv["CMPXWritesSGPR"]   = isaVersion[0] != 10
+  rv["HasWave32"]        = isaVersion[0] == 10
 
   return rv
 
-def tryAssembler(isaVersion, options, asmString):
+def tryAssembler(isaVersion, options, asmString, debug=False):
   """
   Try to assemble the asmString for the specified target processor
   Success is defined as assembler returning no error code or stderr/stdout
   """
-  if isaVersion == (10,1,0):
+  if isaVersion[0] == 10:
     options += ' -mwavefrontsize64'
 
   asmCmd = "%s -x assembler -target amdgcn-amdhsa -mcpu=%s %s -" \
@@ -1239,14 +1304,14 @@ def tryAssembler(isaVersion, options, asmString):
 
   try:
     result = subprocess.check_output([sysCmd], shell=True,  stderr=subprocess.STDOUT).decode()
-    if globalParameters["PrintLevel"] >=2:
+    if debug or globalParameters["PrintLevel"] >=2:
         print("isaVersion: ", isaVersion)
         print("asm_cmd: ", asmCmd)
         print("output :", result)
     if result != "":
       return 0 # stdout and stderr must be empty
   except subprocess.CalledProcessError as e:
-    if globalParameters["PrintLevel"] >=2:
+    if debug or globalParameters["PrintLevel"] >=2:
         print("CalledProcessError", e)
     return 0 # error, not supported
 
@@ -1283,10 +1348,6 @@ def assignGlobalParameters( config ):
 
   global globalParameters
 
-  print1("# Restoring default globalParameters")
-  for key in defaultGlobalParameters:
-    globalParameters[key] = deepcopy(defaultGlobalParameters[key])
-
   # Minimum Required Version
   if "MinimumRequiredVersion" in config:
     if not versionIsCompatible(config["MinimumRequiredVersion"]):
@@ -1308,12 +1369,22 @@ def assignGlobalParameters( config ):
 
   # ROCm Agent Enumerator Path
   globalParameters["ROCmAgentEnumeratorPath"] = locateExe("/opt/rocm/bin", "rocm_agent_enumerator")
+  if "CxxCompiler" in config:
+    globalParameters["CxxCompiler"] = config["CxxCompiler"]
+
   if "TENSILE_ROCM_ASSEMBLER_PATH" in os.environ:
     globalParameters["AssemblerPath"] = os.environ.get("TENSILE_ROCM_ASSEMBLER_PATH")
-  if globalParameters["AssemblerPath"] is None:
+  elif globalParameters["AssemblerPath"] is None and globalParameters["CxxCompiler"] == "hipcc":
+    globalParameters["AssemblerPath"] = locateExe("/opt/rocm/llvm/bin", "clang++")
+  elif globalParameters["AssemblerPath"] is None and globalParameters["CxxCompiler"] == "hcc":
     globalParameters["AssemblerPath"] = locateExe("/opt/rocm/bin", "hcc")
+
   globalParameters["ROCmSMIPath"] = locateExe("/opt/rocm/bin", "rocm-smi")
-  globalParameters["ExtractKernelPath"] = locateExe("/opt/rocm/bin", "extractkernel")
+  if globalParameters["CxxCompiler"] == "hcc":
+    globalParameters["ExtractKernelPath"] = locateExe("/opt/rocm/bin", "extractkernel")
+  else:
+    globalParameters["ExtractKernelPath"] = locateExe("/opt/rocm/hip/bin", "extractkernel")
+    globalParameters["ClangOffloadBundlerPath"] = locateExe("/opt/rocm/llvm/bin", "clang-offload-bundler")
 
   if "ROCmAgentEnumeratorPath" in config:
     globalParameters["ROCmAgentEnumeratorPath"] = config["ROCmAgentEnumeratorPath"]
@@ -1348,7 +1419,11 @@ def assignGlobalParameters( config ):
     print1 ("# Asm caps for %s:%s" % (gfxName(v), asmCaps))
     print1 ("# Arch caps for %s:%s" % (gfxName(v), archCaps))
 
-  # For ubuntu platforms, call dpkg to grep the version of hcc.  This check is platform specific, and in the future
+  globalParameters["SupportedISA"] = list([i for i in globalParameters["SupportedISA"] if globalParameters["AsmCaps"][i]["SupportedISA"]])
+
+  validParameters["ISA"] = [(0,0,0), *globalParameters["SupportedISA"]]
+
+  # For ubuntu platforms, call dpkg to grep the version of hip-clang.  This check is platform specific, and in the future
   # additional support for yum, dnf zypper may need to be added.  On these other platforms, the default version of
   # '0.0.0' will persist
 
@@ -1356,14 +1431,19 @@ def assignGlobalParameters( config ):
   # The alternative would be to install the `distro` package.
   # See https://docs.python.org/3.7/library/platform.html#platform.linux_distribution
   try:
-    output = subprocess.run(["dpkg", "-l", "hcc"], check=True, stdout=subprocess.PIPE).stdout.decode()
+    if globalParameters["CxxCompiler"] == "hipcc":
+      output = subprocess.run(["dpkg", "-l", "hip-rocclr"], check=True, stdout=subprocess.PIPE).stdout.decode()
+    elif globalParameters["CxxCompiler"] == "hcc":
+      output = subprocess.run(["dpkg", "-l", "hcc"], check=True, stdout=subprocess.PIPE).stdout.decode()
 
     for line in output.split('\n'):
-      if 'hcc' in line:
+      if 'hipcc' in line:
+        globalParameters['HipClangVersion'] = line.split()[2]
+      elif 'hcc' in line:
         globalParameters['HccVersion'] = line.split()[2]
 
   except (subprocess.CalledProcessError, OSError) as e:
-      printWarning("Error: {} looking for package {}: {}".format('dpkg', 'hcc', e))
+      printWarning("Error: {} looking for package {}: {}".format('dpkg', 'hip-rocclr', e))
 
   for key in config:
     value = config[key]
@@ -1387,7 +1467,7 @@ def assignParameterWithDefault(destinationDictionary, key, sourceDictionary, \
 # populate dst with src[key] else abort since it's required
 def assignParameterRequired(destinationDictionary, key, sourceDictionary):
   if key in sourceDictionary:
-    destinationDictionary[key] = sourceDictionary[key]
+    destinationDictionary[key] = deepcopy(sourceDictionary[key])
   else:
     printExit("Parameter \"%s\" must be defined in dictionary %s" % (key, sourceDictionary) )
 

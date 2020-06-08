@@ -100,21 +100,21 @@ def configMarks(filepath, rootDir, availableArchs):
 
     dataTypes = set([problem[0]["DataType"] for problem in doc["BenchmarkProblems"]])
     operationTypes = set([problem[0]["OperationType"] for problem in doc["BenchmarkProblems"]])
-    
+
     languages = set()
     #print ("***doc=", doc)
     for obj, path in walkDict(doc):
         #print ("  obj=", obj, "path=", path)
         if "KernelLanguage" in path and isinstance(obj, str):
             languages.add(obj)
-    
+
     for l in languages:
         marks.append(markNamed(l))
 
     for dt in dataTypes:
         dataType = DataType.DataType(dt)
         marks.append(markNamed(dataType.toName()))
-    
+
     for operationType in operationTypes:
         marks.append(markNamed(operationType))
 
@@ -138,7 +138,10 @@ def findConfigs(rootDir=None):
     """
     if rootDir ==  None:
         rootDir = os.path.dirname(os.path.dirname(__file__))
-    
+        printRoot = os.path.dirname(os.path.dirname(rootDir))
+    else:
+        printRoot = rootDir
+
     availableArchs = findAvailableArchs()
 
     params = []
@@ -147,8 +150,8 @@ def findConfigs(rootDir=None):
             if filename.endswith('.yaml'):
                 filepath = os.path.join(rootDir, dirpath, filename)
                 marks = configMarks(filepath, rootDir, availableArchs)
-                testname = os.path.splitext(filename)[0]
-                params.append(pytest.param(filepath, marks=marks, id=testname))
+                relpath = os.path.relpath(filepath, printRoot)
+                params.append(pytest.param(filepath, marks=marks, id=relpath))
     return params
 
 @pytest.mark.parametrize("config", findConfigs())

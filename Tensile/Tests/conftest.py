@@ -2,6 +2,13 @@ import pytest
 import os
 import sys
 
+try:
+    import xdist  # noqa
+except ImportError:
+    @pytest.fixture(scope="session")
+    def worker_id():
+        return None
+
 testdir = os.path.dirname(__file__)
 moddir = os.path.dirname(testdir)
 rootdir = os.path.dirname(moddir)
@@ -11,6 +18,28 @@ def pytest_addoption(parser):
     parser.addoption("--tensile-options")
     parser.addoption("--no-common-build", action="store_true")
     parser.addoption("--builddir", "--client-dir")
+    parser.addoption("--timing-file", default=None)
+
+@pytest.fixture(scope="session")
+def timing_path(pytestconfig, tmpdir_factory):
+    userDir = pytestconfig.getoption("--timing-file")
+    if userDir is not None:
+        return userDir
+    return str(tmpdir_factory.mktemp("results") / "timing.csv")
+
+@pytest.fixture(autouse=True)
+def incremental_timer(request, worker_lock_instance, timing_path):
+    #import pdb
+    #pdb.set_trace()
+    import datetime
+    start = datetime.datetime.now()
+    yield
+    stop = datetime.datetime.now()
+
+    testtime = stop - start
+    with worker_lock_instance:
+        with open(timing_path, "a") as f:
+            f.write("{},{}\n".format(request.node.name, testtime.total_seconds()))
 
 @pytest.fixture(scope="session")
 def builddir(pytestconfig, tmpdir_factory):
@@ -19,12 +48,30 @@ def builddir(pytestconfig, tmpdir_factory):
         return userDir
     return str(tmpdir_factory.mktemp("0_Build"))
 
+@pytest.fixture(scope="session")
+def worker_lock_path(tmp_path_factory, worker_id):
+    if not worker_id:
+        return None
+
+    return tmp_path_factory.getbasetemp().parent / "client_execution.lock"
+
 @pytest.fixture
-def tensile_args(pytestconfig, builddir, worker_id, tmp_path_factory):
+def tensile_script_path():
+    return os.path.join(moddir, 'bin', 'Tensile')
+
+@pytest.fixture
+def worker_lock_instance(worker_lock_path):
+    if not worker_lock_path:
+        return open(os.devnull)
+
+    import filelock
+    return filelock.FileLock(str(worker_lock_path))
+
+@pytest.fixture
+def tensile_args(pytestconfig, builddir, worker_lock_path):
     rv = []
-    if worker_id:
-        lockPath = tmp_path_factory.getbasetemp().parent / "client_execution.lock"
-        rv += ["--client-lock", str(lockPath)]
+    if worker_lock_path:
+        rv += ["--client-lock", str(worker_lock_path)]
 
     extraOptions = pytestconfig.getoption("--tensile-options")
     if extraOptions is not None:
@@ -41,4 +88,5 @@ def pytest_collection_modifyitems(items):
     for item in items:
         relpath = item.fspath.relto(testdir)
         components = relpath.split(os.path.sep)
-        item.add_marker(getattr(pytest.mark, components[0]))
+        if len(components) > 0 and len(components[0]) > 0:
+            item.add_marker(getattr(pytest.mark, components[0]))
