@@ -23,7 +23,7 @@ from . import Utils
 from .BenchmarkStructs import BenchmarkProcess
 from .ClientWriter import runClient, writeClientParameters, writeClientConfigNew
 from .Common import ClientExecutionLock, assignGlobalParameters, globalParameters, defaultSolution, defaultBenchmarkCommonParameters, \
-  HR, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime, ProgressBar, hasParam
+  HR, setWorkingPath, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime, ProgressBar, hasParam
 from .KernelWriterAssembly import KernelWriterAssembly
 from .KernelWriterSource import KernelWriterSource
 from .SolutionStructs import Solution, ProblemType, ProblemSizes
@@ -233,7 +233,9 @@ def WriteClientLibraryFromSolutionFilePath(libraryWorkingPath, tensileSourcePath
 
   fileSolutions = YAMLIO.readSolutions(solutionsFilePath)
   solutions = fileSolutions[1]
+  setWorkingPath (libraryWorkingPath)
   WriteClientLibraryFromSolutions(solutions, tensileSourcePath, libraryWorkingPath)
+  popWorkingPath()
 
 
 def runProblemSizeGroup(problemSizeGroupIdx, problemSizeGroupConfig, problemTypeConfig, libraryWorkingPath, tensileSourcePath):
@@ -339,25 +341,83 @@ def CreateBenchmarkClientPrameters(libraryPath, sizeFilePath, dataFilePath, conf
 
   writeClientConfigNew(True, problemSizes, problemType, codeObjectFiles, dataFilePath, configFile)
 
-def forkHardcodedParameters( hardcodedParameters, update ):
+def forkHardcodedParameters( basePermutation, update ):
   updatedHardcodedParameters = []
-  for oldPermutation in hardcodedParameters:
-    for newPermutation in update:
-      permutation = {}
-      permutation.update(oldPermutation)
-      permutation.update(newPermutation)
-      updatedHardcodedParameters.append(permutation)
+  #for oldPermutation in hardcodedParameters:
+  for newPermutation in update:
+    permutation = {}
+    permutation.update(basePermutation)
+    permutation.update(newPermutation)
+    updatedHardcodedParameters.append(permutation)
   return updatedHardcodedParameters
 
-def assigenParameters(problemTypeConfig, problemSizeGroupConfigs):
+def assigenParameters(problemTypeConfig, configBenchmarkCommonParameters, configForkParameters):
 
-  hardcodedParametersSets = [{}]
+  #hardcodedParametersSets = [{}]
 
   problemTypeObj = ProblemType(problemTypeConfig)
   globalParameters["EnableHalf"] = problemTypeObj["DataType"].isHalf()
   initialSolutionParameters = { "ProblemType": problemTypeConfig }
   initialSolutionParameters.update(defaultSolution)
 
+  hardcodedParameters = []
+  #for problemSizeGroupConfig in problemSizeGroupConfigs:
+
+  #configBenchmarkCommonParameters = deepcopy(problemSizeGroupConfig["BenchmarkCommonParameters"])
+  #configForkParameters = deepcopy(problemSizeGroupConfig["ForkParameters"])
+
+  benchmarkCommonParameters = []
+  for paramDict in defaultBenchmarkCommonParameters:
+    for paramName in paramDict:
+      if not hasParam( paramName, [ configBenchmarkCommonParameters, configForkParameters ]) \
+          or paramName == "ProblemSizes":
+        benchmarkCommonParameters.append(paramDict)
+  if configBenchmarkCommonParameters != None:
+    for paramDict in configBenchmarkCommonParameters:
+      benchmarkCommonParameters.append(paramDict)
+
+  for stepList in [benchmarkCommonParameters, configForkParameters]:
+    for paramDict in copy(stepList):
+      for paramName in copy(paramDict):
+        paramValues = paramDict[paramName]
+        if paramValues == None:
+          printExit("You must specify value for parameters \"%s\"" % paramName )
+        if len(paramValues) < 2 and paramName != "ProblemSizes":
+          paramDict.pop(paramName)
+          initialSolutionParameters[paramName] = paramValues[0]
+          if len(paramDict) == 0:
+            stepList.remove(paramDict)
+
+  totalPermutations = 1
+  for param in configForkParameters:
+    for name in param: # only 1
+      values = param[name]
+      totalPermutations *= len(values)
+  forkPermutations = []
+  for i in range(0, totalPermutations):
+    forkPermutations.append({})
+    pIdx = i
+    for param in configForkParameters:
+      for name in param:
+        values = param[name]
+        valueIdx = pIdx % len(values)
+        forkPermutations[i][name] = values[valueIdx]
+        pIdx //= len(values)
+  if len(forkPermutations) > 0:
+    hardcodedParameters = forkHardcodedParameters(initialSolutionParameters, forkPermutations)
+
+  return (hardcodedParameters, initialSolutionParameters)
+
+def assigenParameters1(problemTypeConfig, problemSizeGroupConfigs):
+
+  #hardcodedParametersSets = [{}]
+
+  problemTypeObj = ProblemType(problemTypeConfig)
+  globalParameters["EnableHalf"] = problemTypeObj["DataType"].isHalf()
+  initialSolutionParameters = { "ProblemType": problemTypeConfig }
+  initialSolutionParameters.update(defaultSolution)
+
+  hardcodedParameters = []
   for problemSizeGroupConfig in problemSizeGroupConfigs:
 
     configBenchmarkCommonParameters = deepcopy(problemSizeGroupConfig["BenchmarkCommonParameters"])
@@ -381,7 +441,7 @@ def assigenParameters(problemTypeConfig, problemSizeGroupConfigs):
             printExit("You must specify value for parameters \"%s\"" % paramName )
           if len(paramValues) < 2 and paramName != "ProblemSizes":
             paramDict.pop(paramName)
-            hardcodedParametersSets[0][paramName] = paramValues[0]
+            #hardcodedParametersSets[0][paramName] = paramValues[0]
             initialSolutionParameters[paramName] = paramValues[0]
             if len(paramDict) == 0:
               stepList.remove(paramDict)
@@ -402,10 +462,10 @@ def assigenParameters(problemTypeConfig, problemSizeGroupConfigs):
           forkPermutations[i][name] = values[valueIdx]
           pIdx //= len(values)
     if len(forkPermutations) > 0:
-      hardcodedParameters = forkHardcodedParameters(hardcodedParametersSets, forkPermutations)
+      #hardcodedParameters = forkHardcodedParameters(hardcodedParametersSets, forkPermutations)
+      hardcodedParameters = forkHardcodedParameters(initialSolutionParameters, forkPermutations)
 
   return (hardcodedParameters, initialSolutionParameters)
-
 
 def generateSolutions (problemTypeConfig, hardcodedParameters, initialSolutionParameters):
   numHardcoded = len(hardcodedParameters)
@@ -426,13 +486,14 @@ def generateSolutions (problemTypeConfig, hardcodedParameters, initialSolutionPa
     hardcodedParamDict = hardcodedParameters[hardcodedIdx]
     
     solution = {"ProblemType": deepcopy(problemType.state)}
+    solution.update(initialSolutionParameters)
     solution.update(hardcodedParamDict)
 
     # append default parameters where necessary
-    for initialSolutionParameterName in initialSolutionParameters:
-      if initialSolutionParameterName not in solution:
-        solution[initialSolutionParameterName] = \
-            initialSolutionParameters[initialSolutionParameterName]
+    #for initialSolutionParameterName in initialSolutionParameters:
+    #  if initialSolutionParameterName not in solution:
+    #    solution[initialSolutionParameterName] = \
+    #        initialSolutionParameters[initialSolutionParameterName]
     # TODO check if solution matches problem size for exact tile kernels
     solutionObject = Solution(solution)
     if solutionObject["Valid"]:
@@ -446,14 +507,15 @@ def generateSolutions (problemTypeConfig, hardcodedParameters, initialSolutionPa
     #  progressBar.increment()
 
   # remove hardcoded that don't have any valid benchmarks
-  removeHardcoded = []
-  for hardcodedIdx in range(0, numHardcoded):
-    if len(solutions[hardcodedIdx]) == 0:
-      hardcodedParamDict = hardcodedParameters[hardcodedIdx]
-      removeHardcoded.append(hardcodedParamDict)
+  #######
+  #removeHardcoded = []
+  #for hardcodedIdx in range(0, numHardcoded):
+  #  if len(solutions[hardcodedIdx]) == 0:
+  #    hardcodedParamDict = hardcodedParameters[hardcodedIdx]
+  #    removeHardcoded.append(hardcodedParamDict)
 
-  for hardcodedParam in removeHardcoded:
-    hardcodedParameters.remove(hardcodedParam)
+  #for hardcodedParam in removeHardcoded:
+  #  hardcodedParameters.remove(hardcodedParam)
   solutionList = list (solutionSet)
 
   return solutionList
@@ -511,48 +573,55 @@ def TensileCreateClientLibrary(userArgs):
     problemSizeGroupConfigs = [{}]
     if len(benchmarkProblemTypeConfig) > 1:
       problemSizeGroupConfigs = benchmarkProblemTypeConfig[1:]
-    hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, problemSizeGroupConfigs)
 
-    problemTypeObj = ProblemType(problemTypeConfig)
-    problemTypeName = str(problemTypeObj)
-    problemSizeGroupName = "%s_%02u" % (problemTypeName, problemSizeGroupIdx)
+    for problemSizeGroupIdx,problemSizeGroupConfig in enumerate(problemSizeGroupConfigs):
 
-    problemSizeGroupNamePath = os.path.join(effectiveWorkingPath, problemSizeGroupName)
-    ensurePath (problemSizeGroupNamePath)
+      configBenchmarkCommonParameters = deepcopy(problemSizeGroupConfig["BenchmarkCommonParameters"])
+      configForkParameters = deepcopy(problemSizeGroupConfig["ForkParameters"])
+      #hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, problemSizeGroupConfigs)
+      hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, \
+        configBenchmarkCommonParameters, configForkParameters)
 
-    shortNamePath = os.path.join(problemSizeGroupNamePath, shortName)
-    ensurePath(shortNamePath)
+      problemTypeObj = ProblemType(problemTypeConfig)
+      problemTypeName = str(problemTypeObj)
+      problemSizeGroupName = "%s_%02u" % (problemTypeName, problemSizeGroupIdx)
 
-    solutionsList = generateSolutions (problemTypeConfig, hardcodedParametersSets, initialSolutionParameters)
+      problemSizeGroupNamePath = os.path.join(effectiveWorkingPath, problemSizeGroupName)
+      ensurePath (problemSizeGroupNamePath)
 
-    solutionPath = os.path.join(shortNamePath, "solutions")
-    ensurePath (solutionPath)
-    solutionsFilePath = os.path.join(solutionPath, "solutions.yaml")
+      shortNamePath = os.path.join(problemSizeGroupNamePath, shortName)
+      ensurePath(shortNamePath)
+
+      solutionsList = generateSolutions (problemTypeConfig, hardcodedParametersSets, initialSolutionParameters)
+
+      solutionPath = os.path.join(shortNamePath, "solutions")
+      ensurePath (solutionPath)
+      solutionsFilePath = os.path.join(solutionPath, "solutions.yaml")
 
 
-    ps = ProblemSizes(problemTypeObj, None)
-    YAMLIO.writeSolutions(solutionsFilePath, ps, [solutionsList])
+      ps = ProblemSizes(problemTypeObj, None)
+      YAMLIO.writeSolutions(solutionsFilePath, ps, [solutionsList])
 
-    sourcePath = os.path.join(shortNamePath, "source")
-    ensurePath(sourcePath)
-    WriteClientLibraryFromSolutions(solutionsList, globalSourcePath, sourcePath)
+      sourcePath = os.path.join(shortNamePath, "source")
+      ensurePath(sourcePath)
+      WriteClientLibraryFromSolutions(solutionsList, globalSourcePath, sourcePath)
 
-    libraryPath = os.path.join(sourcePath, "library")
-    sizePath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_2/tune0/testLibrary/sizes"
-    sizeFilePath = os.path.join(sizePath, "sizes.yaml")
+      libraryPath = os.path.join(sourcePath, "library")
+      sizePath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_2/tune0/testLibrary/sizes"
+      sizeFilePath = os.path.join(sizePath, "sizes.yaml")
 
-    outputPath = os.path.join(shortNamePath, "results")
-    ensurePath(outputPath)
-    dataPath = os.path.join(shortNamePath, "data")
-    ensurePath(dataPath)
-    resutlsFilePath = os.path.join(dataPath, "benchmark.csv")
-    configFile = os.path.join(outputPath, "ClientParameters.ini")
-    CreateBenchmarkClientPrameters(libraryPath, sizeFilePath, resutlsFilePath, configFile)
-    scriptPath = os.path.join(shortNamePath, "script")
-    ensurePath(scriptPath)
-    returncode = runNewClient(scriptPath, configFile)
+      outputPath = os.path.join(shortNamePath, "results")
+      ensurePath(outputPath)
+      dataPath = os.path.join(shortNamePath, "data")
+      ensurePath(dataPath)
+      resutlsFilePath = os.path.join(dataPath, "benchmark.csv")
+      configFile = os.path.join(outputPath, "ClientParameters.ini")
+      CreateBenchmarkClientPrameters(libraryPath, sizeFilePath, resutlsFilePath, configFile)
+      scriptPath = os.path.join(shortNamePath, "script")
+      ensurePath(scriptPath)
+      returncode = runNewClient(scriptPath, configFile)
 
-    print (returncode)
+      print (returncode)
 
 
 

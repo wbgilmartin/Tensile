@@ -19,7 +19,7 @@ from . import Utils
 from .BenchmarkStructs import BenchmarkProcess
 from .ClientWriter import runClient, writeClientParameters #, writeClientConfigNew
 from .Common import ClientExecutionLock, assignGlobalParameters, globalParameters, defaultSolution, defaultBenchmarkCommonParameters, \
-  HR, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime, ProgressBar, hasParam
+  HR, setWorkingPath, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime, ProgressBar, hasParam
 from .KernelWriterAssembly import KernelWriterAssembly
 from .KernelWriterSource import KernelWriterSource
 from .SolutionStructs import Solution, ProblemType, ProblemSizes
@@ -28,16 +28,17 @@ from .TensileCreateLibrary import writeSolutionsAndKernels, writeCMake
 from .SolutionLibrary import MasterSolutionLibrary
 from .Contractions import ProblemType as ContractionsProblemType
 from .TensileCreateClientLibrary import assigenParameters, generateSolutions, WriteClientLibraryFromSolutions, \
-    CreateBenchmarkClientPrametersForSizes, runNewClient
+    CreateBenchmarkClientPrametersForSizes, runNewClient, WriteClientLibraryFromSolutionFilePath
 
 
 def buildSolution(problemTypeConfig, benchmarkCommonParameters, forkParameters, globalSourcePath, effectiveWorkingPath):
 
   infoFile = os.path.join(effectiveWorkingPath, "solution.info")
-  problemSizeGroupConfigs = [{"BenchmarkCommonParameters": benchmarkCommonParameters, "ForkParameters": forkParameters}]
+  #problemSizeGroupConfigs = [{"BenchmarkCommonParameters": benchmarkCommonParameters, "ForkParameters": forkParameters}]
 
   f = open(infoFile, "w")
-  hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, problemSizeGroupConfigs)
+  #hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, problemSizeGroupConfigs)
+  hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, benchmarkCommonParameters, forkParameters)
   f.write("Total solutions: %u\n" % len(hardcodedParametersSets))
 
   solutionsList = generateSolutions (problemTypeConfig, hardcodedParametersSets, initialSolutionParameters)
@@ -58,11 +59,16 @@ def buildSolution(problemTypeConfig, benchmarkCommonParameters, forkParameters, 
   return solutionsList 
 
 def getProblemTypeConfigs():
+  #problemTypeConfigs = [ 
+  #  {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": False, "TransposeB": False, "UseBeta": True}, \
+  #  {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": False, "TransposeB": True, "UseBeta": True}, \
+  #  {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": True, "TransposeB": False, "UseBeta": True} 
+  #]
+
   problemTypeConfigs = [ 
-    {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": False, "TransposeB": False, "UseBeta": True}, \
-    {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": False, "TransposeB": True, "UseBeta": True}, \
-    {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": True, "TransposeB": False, "UseBeta": True} 
+    {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": False, "TransposeB": False, "UseBeta": True}
   ]
+
   return problemTypeConfigs
 
 def generateConfigs():
@@ -86,8 +92,8 @@ def generateConfigs():
   for problemTypeConfig in problemTypeConfigs:
 
     #ttSides = [([2,4,8], [2,4,8]),([3,5,7], [2,4,8])]
-    ttSides = [([4], [4,8]), ([5], [4,8])]
-    #ttSides = [8]
+    #ttSides = [([4], [4,8]), ([5], [4,8])]
+    ttSides = [([4], [4])]
     ttList = []
     for ttIndexSet in ttSides:
       tt = []
@@ -96,8 +102,10 @@ def generateConfigs():
           tt.append([i, j])
       ttList.append(tt)
 
-    wgSides = [([8,16],[8]), ([8,16],[16])]
-    lsu = [1,2]
+    #wgSides = [([8,16],[8]), ([8,16],[16])]
+    wgSides = [([16],[16])]
+    #lsu = [1,2]
+    lsu = [1]
     wgList = []
     for wgIndexSet in wgSides:
       wg = []
@@ -122,20 +130,25 @@ def generateAllSolutions(globalSourcePath, effectiveWorkingPath):
   configs = generateConfigs()
   #print ("count %u" % len(configs))
   configCount = 0
+  #origionalWorkingPath = globalParameters["WorkingPath"]
   for config in configs:
     problemTypeConfig, benchmarkCommonParameters, forkParameters = config
     problemTypeObj = ProblemType(problemTypeConfig)
     problemTypeName = str(problemTypeObj)
     currentPathName = "%u" % configCount 
     solutionWorkingPath = ensurePath(os.path.join(effectiveWorkingPath, problemTypeName, currentPathName))
+    setWorkingPath (solutionWorkingPath)
     startFile = os.path.join(solutionWorkingPath, "time.start")
     stopFile = os.path.join(solutionWorkingPath, "time.stop")
 
-    os.mknod(startFile)
+    #os.mknod(startFile)
+    #globalParameters["WorkingPath"] = solutionWorkingPath
     buildSolution(problemTypeConfig, benchmarkCommonParameters, forkParameters, globalSourcePath, solutionWorkingPath)
-    os.mknod(stopFile)
+    popWorkingPath()
+    #os.mknod(stopFile)
 
     configCount += 1
+  #globalParameters["WorkingPath"] = origionalWorkingPath
 
 def getProblemTypeName(problemTypeConfig):
   problemTypeObj = ProblemType(problemTypeConfig)
@@ -188,6 +201,19 @@ def getSizeMapper():
 #   value = sizeMap[key]
 #    print (value)
 
+def runBenchmarksForSizes(libraryPath, outputPath, clientBuildDir, sizes):
+  metadataFilepath = os.path.join(libraryPath, "metadata.yaml")
+  metadataFile = YAMLIO.readConfig(metadataFilepath)
+  problemTypeDict = metadataFile["ProblemType"]
+  problemSizes = ProblemSizes(problemTypeDict, sizes)
+  dataPath = ensurePath(os.path.join(outputPath, "data"))
+  configFilePath = ensurePath(os.path.join(outputPath, "configs"))
+  dataFilePath = os.path.join(dataPath, "benchmark.csv")
+  configFile = os.path.join(configFilePath, "ClientParameters.ini")
+  scriptPath = ensurePath(os.path.join(outputPath, "script"))
+  CreateBenchmarkClientPrametersForSizes(libraryPath, problemSizes, dataFilePath, configFile)
+  runNewClient(scriptPath, configFile, clientBuildDir)
+
 def runSizesForAllSolutions(effectiveWorkingPath, clientBuildDir, outputPath):
 
   #sizes = [
@@ -202,38 +228,47 @@ def runSizesForAllSolutions(effectiveWorkingPath, clientBuildDir, outputPath):
   for sizeKey in sizeMap:
     
     currentWorkingPath = os.path.join(effectiveWorkingPath, sizeKey)
-    currentResultsPath = ensurePath(os.path.join(outputPath, sizeKey))
-    thePaths = [f for f in os.scandir(currentWorkingPath) if f.is_dir() and f.name != "client"]
-    for pathObj in thePaths:
-      #print (type(path))
-      #print (path)
-      path = pathObj.path
-      localPathName = pathObj.name
-      localOutputPath = ensurePath(os.path.join(currentResultsPath, localPathName))
-      libraryPath = os.path.join(path, 'source', 'library' )
-      sizes = sizeMap[sizeKey]
-      if os.path.isdir(libraryPath):
-        #print (libPath)
-        metadataFilepath = os.path.join(libraryPath, "metadata.yaml")
-        metadataFile = YAMLIO.readConfig(metadataFilepath)
-        #print (metadataFile["ProblemType"])
-        problemTypeDict = metadataFile["ProblemType"]
-        #problemTypeObj = ProblemType(problemTypeDict)
-        #problemTypeName = str(problemTypeObj)
-        problemSizes = ProblemSizes(problemTypeDict, sizes)
-        #print (True)
-        dataPath = ensurePath(os.path.join(localOutputPath, "data"))
-        configFilePath = ensurePath(os.path.join(localOutputPath, "configs"))
-        dataFilePath = os.path.join(dataPath, "benchmark.csv")
-        configFile = os.path.join(configFilePath, "ClientParameters.ini")
-        scriptPath = ensurePath(os.path.join(localOutputPath, "script"))
+    if os.path.isdir(currentWorkingPath):
+      currentResultsPath = ensurePath(os.path.join(outputPath, sizeKey))
+      thePaths = [f for f in os.scandir(currentWorkingPath) if f.is_dir() and f.name != "client"]
+      for pathObj in thePaths:
+        #print (type(path))
+        #print (path)
+        path = pathObj.path
+        localPathName = pathObj.name
+        localOutputPath = ensurePath(os.path.join(currentResultsPath, localPathName))
+        libraryPath = os.path.join(path, 'source', 'library' )
+        sizes = sizeMap[sizeKey]
+        if os.path.isdir(libraryPath):
+          #problemSizes = ProblemSizes(problemTypeDict, sizes)
+          runBenchmarksForSizes(libraryPath, localOutputPath, clientBuildDir, sizes)
+          
+          ##print (libPath)
+          #metadataFilepath = os.path.join(libraryPath, "metadata.yaml")
+          #metadataFile = YAMLIO.readConfig(metadataFilepath)
+          ##print (metadataFile["ProblemType"])
+          #problemTypeDict = metadataFile["ProblemType"]
+          ##problemTypeObj = ProblemType(problemTypeDict)
+          ##problemTypeName = str(problemTypeObj)
+          #problemSizes = ProblemSizes(problemTypeDict, sizes)
+          ##print (True)
+          #dataPath = ensurePath(os.path.join(localOutputPath, "data"))
+          #configFilePath = ensurePath(os.path.join(localOutputPath, "configs"))
+          #dataFilePath = os.path.join(dataPath, "benchmark.csv")
+          #configFile = os.path.join(configFilePath, "ClientParameters.ini")
+          #scriptPath = ensurePath(os.path.join(localOutputPath, "script"))
 
-        CreateBenchmarkClientPrametersForSizes(libraryPath, problemSizes, dataFilePath, configFile)
-        #returncode = runNewClient(scriptPath, configFile, clientBuildDir)
-        runNewClient(scriptPath, configFile, clientBuildDir)
+          #CreateBenchmarkClientPrametersForSizes(libraryPath, problemSizes, dataFilePath, configFile)
+          #returncode = runNewClient(scriptPath, configFile, clientBuildDir)
+          #runNewClient(scriptPath, configFile, clientBuildDir)
 
 def GenerateSolutions(userArgs):
     
+    globalParameters['CxxCompiler'] = "hipcc"
+    globalParameters["MergeFiles"] = False
+    globalParameters["CodeObjectVersion"] = "V3"
+    #globalParameters["AssemblerPath"] = globalParameters["AssemblerPath"] = locateExe("/opt/rocm/bin", "hcc")
+    #globalParameters["AssemblerPath"] = "/opt/rocm/bin/hipcc"
     assignGlobalParameters({"PrintWinnersOnly": 1})
 
     #problemTypeConfig = {"Batched": True, "DataType": "s", "OperationType": "GEMM", "TransposeA": False, "TransposeB": False,
@@ -295,8 +330,8 @@ def GenerateSolutions(userArgs):
     #  for j in validThreadTileSides:
     #    validThreadTiles.append([i, j])
 
-    globalSourcePath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/Tensile-library-step7/Tensile/Source"
-    effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_7/tune0/testLibrary"
+    globalSourcePath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/Tensile-library-step_9a/Tensile/Source"
+    effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_9/tune0/testLibrary"
     ensurePath(effectiveWorkingPath)
 
     #sourcePath = ensurePath(os.path.join(effectiveWorkingPath, "source"))
@@ -312,6 +347,9 @@ def GenerateSolutions(userArgs):
     #configFile = os.path.join(configFilePath, "ClientParameters.ini")
     #solutionsFilePath = os.path.join(solutionsPath, "solutions.yaml")
 
+    #globalParameters['CxxCompiler'] = "hipcc"
+    #globalParameters["AssemblerPath"] = globalParameters["AssemblerPath"] = locateExe("/opt/rocm/bin", "hcc")
+    #globalParameters["AssemblerPath"] = "/opt/rocm/bin/hipcc"
     ClientExecutable.getClientExecutable(clientBuildDir)
 
     #configs = generateConfigs()
@@ -325,9 +363,17 @@ def GenerateSolutions(userArgs):
     #  configCount += 1
   
     #### use this @@@@@
-    #generateAllSolutions(globalSourcePath, effectiveWorkingPath)
-    
-    
+    #solutionsDir = ensurePath(os.path.join(effectiveWorkingPath, "solutions3"))
+    #generateAllSolutions(globalSourcePath, solutionsDir)
+    #solutionsFilePath = ensurePath(os.path.join(effectiveWorkingPath, "solutions2/Cijk_Ailk_Bljk_SB/0/solutions/solutions.yaml"))
+    #libraryWorkingPath = ensurePath(os.path.join(effectiveWorkingPath, "solutions3-testslib"))
+    #WriteClientLibraryFromSolutionFilePath(libraryWorkingPath, globalSourcePath, solutionsFilePath)
+    #### end this @@@@@
+    #def WriteClientLibraryFromSolutionFilePath(libraryWorkingPath, tensileSourcePath, solutionsFilePath):
+
+    #fileSolutions = YAMLIO.readSolutions(solutionsFilePath)
+    #solutions = fileSolutions[1]
+    #WriteClientLibraryFromSolutions(solutions, tensileSourcePath, libraryWorkingPath)
     
     #problemSizeGroupConfigs = [{"BenchmarkCommonParameters": benchmarkCommonParameters, "ForkParameters": forkParameters}]
     #hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, problemSizeGroupConfigs)
@@ -351,8 +397,11 @@ def GenerateSolutions(userArgs):
     ###### use this $$$ 
     #thePaths = [f.path for f in os.scandir(effectiveWorkingPath) if f.is_dir()]
     #for currentWorkingPath in thePaths:
-    outputPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_7/tune0/testLibrary/results"
-    runSizesForAllSolutions(effectiveWorkingPath, clientBuildDir, outputPath)
+    #outputPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_9/tune0/testLibrary/results"
+    solutionsDir = ensurePath(os.path.join(effectiveWorkingPath, "solutions"))
+    outputPath = ensurePath(os.path.join(effectiveWorkingPath, "results1"))
+    runSizesForAllSolutions(solutionsDir, clientBuildDir, outputPath)
+    ###### end this $$$
 
     #problemSizes = ProblemSizes(problemTypeDict, sizes)
     #problemSizes = ProblemSizes(problemTypeDict, None)
