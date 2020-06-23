@@ -32,12 +32,14 @@ endif()
 
 set(tensile_sources  ${tensile_sources}
     source/AMDGPU.cpp
+    source/ArithmeticUnitTypes.cpp
     source/ContractionProblem.cpp
     source/ContractionSolution.cpp
     source/DataTypes.cpp
     source/Debug.cpp
     source/EmbeddedLibrary.cpp
     source/KernelArguments.cpp
+    source/KernelLanguageTypes.cpp
     source/MessagePack.cpp
     source/TensorDescriptor.cpp
     source/TensorOps.cpp
@@ -99,8 +101,8 @@ if(TENSILE_USE_HIP)
 
 endif()
 
-if(Tensile_YAML)
-    target_compile_definitions(TensileHost PUBLIC TENSILE_YAML)
+if(Tensile_LIBRARY_FORMAT MATCHES "yaml")
+    target_compile_definitions(TensileHost PUBLIC -DTENSILE_YAML=1)
 endif()
 
 if(false)
