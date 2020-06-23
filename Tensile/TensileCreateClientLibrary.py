@@ -16,7 +16,8 @@ from . import Common
 from . import BenchmarkProblems
 from . import ClientWriter
 from . import LibraryLogic
-from . import YAMLIO
+#from . import YAMLIO
+from . import LibraryIO
 from . import SolutionLibrary
 from . import Utils
 
@@ -127,11 +128,15 @@ def writeBenchmarkClientFiles(libraryWorkingPath, tensileSourcePath, solutions, 
   codeObjectFiles = writeSolutionsAndKernels( \
     libraryWorkingPath, cxxCompiler, [problemType], solutions, kernels, kernelsBetaOnly, \
     solutionWriter, kernelWriterSource, kernelWriterAssembly, errorTolerant=True )
+
+
+    
   newLibraryDir = ensurePath(os.path.join(libraryWorkingPath, 'library'))
   newLibraryFile = os.path.join(newLibraryDir, "TensileLibrary.yaml")
   newLibrary = SolutionLibrary.MasterSolutionLibrary.BenchmarkingLibrary(solutions)
   newLibrary.applyNaming(kernelMinNaming)
-  YAMLIO.write(newLibraryFile, Utils.state(newLibrary))
+  #YAMLIO.write(newLibraryFile, Utils.state(newLibrary))
+  LibraryIO.YAMLWriter().write(newLibraryFile, Utils.state(newLibrary))
 
   return (codeObjectFiles, newLibrary)
 
@@ -223,7 +228,8 @@ def WriteClientLibraryFromSolutions(solutionList, tensileSourcePath, libraryWork
   mataDataFilePath = os.path.join(effectiveWorkingPath, 'metadata.yaml')
 
   metaData = {"ProblemType":problemType}
-  YAMLIO.write(mataDataFilePath, metaData)
+  #YAMLIO.write(mataDataFilePath, metaData)
+  LibraryIO.YAMLWriter().write(mataDataFilePath, metaData)
   codeObjectFiles, newLibrary = writeBenchmarkClientFiles(libraryWorkingPath, tensileSourcePath, solutionList, globalParameters["CxxCompiler"],mergeFiles=True)
 
   return (codeObjectFiles, newLibrary)
@@ -231,7 +237,8 @@ def WriteClientLibraryFromSolutions(solutionList, tensileSourcePath, libraryWork
 
 def WriteClientLibraryFromSolutionFilePath(libraryWorkingPath, tensileSourcePath, solutionsFilePath):
 
-  fileSolutions = YAMLIO.readSolutions(solutionsFilePath)
+  #fileSolutions = YAMLIO.readSolutions(solutionsFilePath)
+  fileSolutions = LibraryIO.readSolutions(solutionsFilePath)
   solutions = fileSolutions[1]
   setWorkingPath (libraryWorkingPath)
   WriteClientLibraryFromSolutions(solutions, tensileSourcePath, libraryWorkingPath)
@@ -266,7 +273,8 @@ def runProblemSizeGroup(problemSizeGroupIdx, problemSizeGroupConfig, problemType
     ensurePath(solutionsPath)
     solutionFilePath = os.path.join(solutionsPath,"solutions.yaml")
     ps = ProblemSizes(benchmarkProcess.problemType, None)
-    YAMLIO.writeSolutions(solutionFilePath, ps, [solutionList])
+    #YAMLIO.writeSolutions(solutionFilePath, ps, [solutionList])
+    LibraryIO.writeSolutions(solutionFilePath, ps, [solutionList])
 
     sourcePath = os.path.join(shortNamePath, "source")
     ensurePath(sourcePath)
@@ -317,7 +325,8 @@ def CreateBenchmarkClientPrametersForSizes(libraryPath, problemSizes, dataFilePa
   codeObjectFiles = [f for f in libraryFiles if f.endswith("co")] 
   
   metaDataFilePath = os.path.join(libraryPath, "metadata.yaml")
-  metaData = YAMLIO.readConfig(metaDataFilePath)
+  #metaData = YAMLIO.readConfig(metaDataFilePath)
+  metaData = LibraryIO.readConfig(metaDataFilePath)
   problemTypeDict = metaData["ProblemType"]
   problemType = ContractionsProblemType.FromOriginalState(problemTypeDict)
   
@@ -332,11 +341,13 @@ def CreateBenchmarkClientPrameters(libraryPath, sizeFilePath, dataFilePath, conf
   codeObjectFiles = [f for f in libraryFiles if f.endswith("co")] 
   
   metaDataFilePath = os.path.join(libraryPath, "metadata.yaml")
-  metaData = YAMLIO.readConfig(metaDataFilePath)
+  #metaData = YAMLIO.readConfig(metaDataFilePath)
+  metaData = LibraryIO.readConfig(metaDataFilePath)
   problemTypeDict = metaData["ProblemType"]
   problemType = ContractionsProblemType.FromOriginalState(problemTypeDict)
   
-  sizeFile = YAMLIO.readConfig(sizeFilePath)
+  #sizeFile = YAMLIO.readConfig(sizeFilePath)
+  sizeFile = LibraryIO.readConfig(sizeFilePath)
   problemSizes = ProblemSizes(problemTypeDict, sizeFile)
 
   writeClientConfigNew(True, problemSizes, problemType, codeObjectFiles, dataFilePath, configFile)
@@ -406,7 +417,7 @@ def assigenParameters(problemTypeConfig, configBenchmarkCommonParameters, config
   if len(forkPermutations) > 0:
     hardcodedParameters = forkHardcodedParameters(initialSolutionParameters, forkPermutations)
 
-  return (hardcodedParameters, initialSolutionParameters)
+  return (problemTypeObj, hardcodedParameters, initialSolutionParameters)
 
 def assigenParameters1(problemTypeConfig, problemSizeGroupConfigs):
 
@@ -467,10 +478,10 @@ def assigenParameters1(problemTypeConfig, problemSizeGroupConfigs):
 
   return (hardcodedParameters, initialSolutionParameters)
 
-def generateSolutions (problemTypeConfig, hardcodedParameters, initialSolutionParameters):
+def generateSolutions (problemType, hardcodedParameters, initialSolutionParameters):
   numHardcoded = len(hardcodedParameters)
 
-  problemType = ProblemType(problemTypeConfig)
+  #problemType = ProblemType(problemTypeConfig)
   ############################################################################
   # Enumerate Benchmark Permutations
   ############################################################################
@@ -481,6 +492,7 @@ def generateSolutions (problemTypeConfig, hardcodedParameters, initialSolutionPa
   ############################################################################
   print1("# Enumerating Solutions")
   solutionSet = set() 
+  PrintSolutionRejectionReason = globalParameters["PrintSolutionRejectionReason"]
   for hardcodedIdx in range(0, numHardcoded):
     solutions.append([])
     hardcodedParamDict = hardcodedParameters[hardcodedIdx]
@@ -501,7 +513,7 @@ def generateSolutions (problemTypeConfig, hardcodedParameters, initialSolutionPa
         solutionSet.add(solutionObject)
         solutions[hardcodedIdx].append(solutionObject)
     else:
-      if globalParameters["PrintSolutionRejectionReason"]:
+      if PrintSolutionRejectionReason:
         print1("rejecting solution %s" % str(solutionObject))
     #if globalParameters["PrintLevel"] >= 1:
     #  progressBar.increment()
@@ -539,7 +551,9 @@ def TensileCreateClientLibrary(userArgs):
   configPath = os.path.realpath( args.config_file)
 
   # read config
-  config = YAMLIO.readConfig( configPath )
+  #config = YAMLIO.readConfig( configPath )
+  #LibraryIO.
+  config = LibraryIO.readConfig( configPath )
   globalParameters["ConfigPath"] = configPath
   
   # assign global parameters
@@ -600,7 +614,8 @@ def TensileCreateClientLibrary(userArgs):
 
 
       ps = ProblemSizes(problemTypeObj, None)
-      YAMLIO.writeSolutions(solutionsFilePath, ps, [solutionsList])
+      #YAMLIO.writeSolutions(solutionsFilePath, ps, [solutionsList])
+      LibraryIO.writeSolutions(solutionsFilePath, ps, [solutionsList])
 
       sourcePath = os.path.join(shortNamePath, "source")
       ensurePath(sourcePath)

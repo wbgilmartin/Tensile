@@ -12,7 +12,8 @@ from . import Common
 from . import BenchmarkProblems
 from . import ClientWriter
 from . import LibraryLogic
-from . import YAMLIO
+#from . import YAMLIO
+from . import LibraryIO
 from . import SolutionLibrary
 from . import Utils
 
@@ -38,10 +39,10 @@ def buildSolution(problemTypeConfig, benchmarkCommonParameters, forkParameters, 
 
   f = open(infoFile, "w")
   #hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, problemSizeGroupConfigs)
-  hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, benchmarkCommonParameters, forkParameters)
+  problemTypeObj, hardcodedParametersSets, initialSolutionParameters = assigenParameters(problemTypeConfig, benchmarkCommonParameters, forkParameters)
   f.write("Total solutions: %u\n" % len(hardcodedParametersSets))
 
-  solutionsList = generateSolutions (problemTypeConfig, hardcodedParametersSets, initialSolutionParameters)
+  solutionsList = generateSolutions (problemTypeObj, hardcodedParametersSets, initialSolutionParameters)
   f.write("Valid solutions: %u\n" % len(solutionsList))
   f.close()
 
@@ -52,9 +53,10 @@ def buildSolution(problemTypeConfig, benchmarkCommonParameters, forkParameters, 
 
     solutionsPath = ensurePath(os.path.join(effectiveWorkingPath, "solutions"))
     solutionsFilePath = os.path.join(solutionsPath, "solutions.yaml")
-    problemTypeDict = solutionsList[0]["ProblemType"].state
-    problemSizes = ProblemSizes(problemTypeDict, None)
-    YAMLIO.writeSolutions(solutionsFilePath, problemSizes, [solutionsList])
+    #problemTypeDict = problemTypeObj.state #solutionsList[0]["ProblemType"].state
+    #problemSizes = ProblemSizes(problemTypeDict, None)
+    #YAMLIO.writeSolutions(solutionsFilePath, problemSizes, [solutionsList])
+    LibraryIO.writeSolutions(solutionsFilePath, None, [solutionsList])
 
   return solutionsList 
 
@@ -138,8 +140,8 @@ def generateAllSolutions(globalSourcePath, effectiveWorkingPath):
     currentPathName = "%u" % configCount 
     solutionWorkingPath = ensurePath(os.path.join(effectiveWorkingPath, problemTypeName, currentPathName))
     setWorkingPath (solutionWorkingPath)
-    startFile = os.path.join(solutionWorkingPath, "time.start")
-    stopFile = os.path.join(solutionWorkingPath, "time.stop")
+    #startFile = os.path.join(solutionWorkingPath, "time.start")
+    #stopFile = os.path.join(solutionWorkingPath, "time.stop")
 
     #os.mknod(startFile)
     #globalParameters["WorkingPath"] = solutionWorkingPath
@@ -203,7 +205,8 @@ def getSizeMapper():
 
 def runBenchmarksForSizes(libraryPath, outputPath, clientBuildDir, sizes):
   metadataFilepath = os.path.join(libraryPath, "metadata.yaml")
-  metadataFile = YAMLIO.readConfig(metadataFilepath)
+  #metadataFile = YAMLIO.readConfig(metadataFilepath)
+  metadataFile = LibraryIO.readConfig(metadataFilepath)
   problemTypeDict = metadataFile["ProblemType"]
   problemSizes = ProblemSizes(problemTypeDict, sizes)
   dataPath = ensurePath(os.path.join(outputPath, "data"))
@@ -267,6 +270,7 @@ def GenerateSolutions(userArgs):
     globalParameters['CxxCompiler'] = "hipcc"
     globalParameters["MergeFiles"] = False
     globalParameters["CodeObjectVersion"] = "V3"
+    globalParameters["YAML"] = True
     #globalParameters["AssemblerPath"] = globalParameters["AssemblerPath"] = locateExe("/opt/rocm/bin", "hcc")
     #globalParameters["AssemblerPath"] = "/opt/rocm/bin/hipcc"
     assignGlobalParameters({"PrintWinnersOnly": 1})
@@ -330,8 +334,9 @@ def GenerateSolutions(userArgs):
     #  for j in validThreadTileSides:
     #    validThreadTiles.append([i, j])
 
-    globalSourcePath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/Tensile-library-step_9a/Tensile/Source"
-    effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_9/tune0/testLibrary"
+    globalSourcePath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/Tensile-library-step3_1/Tensile/Source"
+    #effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning3_1/tune0/testLibrary"
+    effectiveWorkingPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning3_1/tune2/testLibrary"
     ensurePath(effectiveWorkingPath)
 
     #sourcePath = ensurePath(os.path.join(effectiveWorkingPath, "source"))
@@ -363,10 +368,10 @@ def GenerateSolutions(userArgs):
     #  configCount += 1
   
     #### use this @@@@@
-    #solutionsDir = ensurePath(os.path.join(effectiveWorkingPath, "solutions3"))
-    #generateAllSolutions(globalSourcePath, solutionsDir)
-    #solutionsFilePath = ensurePath(os.path.join(effectiveWorkingPath, "solutions2/Cijk_Ailk_Bljk_SB/0/solutions/solutions.yaml"))
-    #libraryWorkingPath = ensurePath(os.path.join(effectiveWorkingPath, "solutions3-testslib"))
+    solutionsDir = ensurePath(os.path.join(effectiveWorkingPath, "solutions"))
+    generateAllSolutions(globalSourcePath, solutionsDir)
+    #solutionsFilePath = ensurePath(os.path.join(effectiveWorkingPath, "solutions/Cijk_Ailk_Bljk_SB/0/solutions/solutions.yaml"))
+    #libraryWorkingPath = ensurePath(os.path.join(effectiveWorkingPath, "solutions"))
     #WriteClientLibraryFromSolutionFilePath(libraryWorkingPath, globalSourcePath, solutionsFilePath)
     #### end this @@@@@
     #def WriteClientLibraryFromSolutionFilePath(libraryWorkingPath, tensileSourcePath, solutionsFilePath):
@@ -398,9 +403,9 @@ def GenerateSolutions(userArgs):
     #thePaths = [f.path for f in os.scandir(effectiveWorkingPath) if f.is_dir()]
     #for currentWorkingPath in thePaths:
     #outputPath = "/home/billg/amd/wbgilmartin/tasks/tensile_library_step/tensile_tuning_9/tune0/testLibrary/results"
-    solutionsDir = ensurePath(os.path.join(effectiveWorkingPath, "solutions"))
-    outputPath = ensurePath(os.path.join(effectiveWorkingPath, "results1"))
-    runSizesForAllSolutions(solutionsDir, clientBuildDir, outputPath)
+    #solutionsDir = ensurePath(os.path.join(effectiveWorkingPath, "solutions"))
+    #outputPath = ensurePath(os.path.join(effectiveWorkingPath, "results"))
+    #runSizesForAllSolutions(solutionsDir, clientBuildDir, outputPath)
     ###### end this $$$
 
     #problemSizes = ProblemSizes(problemTypeDict, sizes)

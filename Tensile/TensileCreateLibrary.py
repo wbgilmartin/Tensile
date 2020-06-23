@@ -346,8 +346,6 @@ def writeSolutionsAndKernels(outputPath, CxxCompiler, problemTypes, solutions, k
 
   kIter = zip(kernels, itertools.repeat(kernelWriterSource), itertools.repeat(kernelWriterAssembly))
   results = Common.ParallelMap(processKernelSource, kIter, "Generating kernels", method=lambda x: x.starmap)
-  #do we need this?
-  #print(len(results))
 
   removeKernels = []
   removeSolutions = []
@@ -985,6 +983,63 @@ def writeCMake(outputPath, solutions, kernels, libraryStaticFiles, clientName ):
   generatedFile.close()
 
 
+#def writeSolutionsAndKernelsForCodeObject(libraryWorkingPath, tensileSourcePath, problemTypes, \
+def writeSolutionsAndKernelsForCodeObject(libraryWorkingPath,  cxxCompiler, problemTypes, solutions): #, mergeFiles=False):
+  
+  # create solution writer and kernel writer
+  kernels = []
+  kernelsBetaOnly = []
+  for solution in solutions:
+    solutionKernels = solution.getKernels()
+    for kernel in solutionKernels:
+      if kernel not in kernels:
+        kernels.append(kernel)
+    solutionKernelsBetaOnly = solution.getKernelsBetaOnly()
+    for kernel in solutionKernelsBetaOnly:
+      if KernelWriter.getKernelNameBetaOnly(kernel) not in \
+          [KernelWriter.getKernelNameBetaOnly(k) for k in kernelsBetaOnly]:
+        kernelsBetaOnly.append(kernel)
+
+  if globalParameters["ShortNames"] and not globalParameters["MergeFiles"]:
+    solutionSerialNaming = Solution.getSerialNaming(solutions)
+    kernelSerialNaming = Solution.getSerialNaming(kernels)
+  else:
+    solutionSerialNaming = None
+    kernelSerialNaming = None
+  solutionMinNaming = Solution.getMinNaming(solutions)
+  kernelMinNaming = Solution.getMinNaming(kernels)
+  solutionWriter = SolutionWriter( \
+      solutionMinNaming, solutionSerialNaming, \
+      kernelMinNaming, kernelSerialNaming)
+  kernelWriterSource = KernelWriterSource( \
+      kernelMinNaming, kernelSerialNaming)
+  kernelWriterAssembly = KernelWriterAssembly( \
+      kernelMinNaming, kernelSerialNaming)
+
+  # write solutions and kernels
+  #problemTypes = list(logicData.keys())
+  codeObjectFiles = writeSolutionsAndKernels(libraryWorkingPath, cxxCompiler, problemTypes, \
+                                             solutions, kernels, kernelsBetaOnly, \
+                                             solutionWriter, kernelWriterSource, kernelWriterAssembly)
+  
+  return codeObjectFiles
+
+def generateKernelObjectsFromSolutions(solutions):
+  # create solution writer and kernel writer
+  kernels = []
+  kernelsBetaOnly = []
+  for solution in solutions:
+    solutionKernels = solution.getKernels()
+    for kernel in solutionKernels:
+      if kernel not in kernels:
+        kernels.append(kernel)
+    solutionKernelsBetaOnly = solution.getKernelsBetaOnly()
+    for kernel in solutionKernelsBetaOnly:
+      if KernelWriter.getKernelNameBetaOnly(kernel) not in \
+          [KernelWriter.getKernelNameBetaOnly(k) for k in kernelsBetaOnly]:
+        kernelsBetaOnly.append(kernel)
+
+  return (kernels, kernelsBetaOnly)
 
 ################################################################################
 # Tensile Create Library
@@ -1046,7 +1101,8 @@ def TensileCreateLibrary():
   arguments["PackageLibrary"] = args.PackageLibrary
   arguments["LegacyComponents"] = args.LegacyComponents
   if args.new_client_only:
-    arguments["NewClient"] = 2
+    #arguments["NewClient"] = 2
+    arguments["NewClient"] = 0
 
   assignGlobalParameters(arguments)
 
@@ -1118,19 +1174,20 @@ def TensileCreateLibrary():
         masterLibraries[architectureName].version = args.version
 
   # create solution writer and kernel writer
-  kernels = []
-  kernelsBetaOnly = []
-  for solution in solutions:
-    solutionKernels = solution.getKernels()
-    for kernel in solutionKernels:
-      if kernel not in kernels:
-        kernels.append(kernel)
-    solutionKernelsBetaOnly = solution.getKernelsBetaOnly()
-    for kernel in solutionKernelsBetaOnly:
-      if KernelWriter.getKernelNameBetaOnly(kernel) not in \
-          [KernelWriter.getKernelNameBetaOnly(k) for k in kernelsBetaOnly]:
-        kernelsBetaOnly.append(kernel)
+  #kernels = []
+  #kernelsBetaOnly = []
+  #for solution in solutions:
+  #  solutionKernels = solution.getKernels()
+  #  for kernel in solutionKernels:
+  #    if kernel not in kernels:
+  #      kernels.append(kernel)
+  #  solutionKernelsBetaOnly = solution.getKernelsBetaOnly()
+  #  for kernel in solutionKernelsBetaOnly:
+  #    if KernelWriter.getKernelNameBetaOnly(kernel) not in \
+  #        [KernelWriter.getKernelNameBetaOnly(k) for k in kernelsBetaOnly]:
+  #      kernelsBetaOnly.append(kernel)
 
+  kernels, kernelsBetaOnly = generateKernelObjectsFromSolutions(solutions)
   # if any kernels are assembly, append every ISA supported
 
   if globalParameters["ShortNames"] and not globalParameters["MergeFiles"]:
