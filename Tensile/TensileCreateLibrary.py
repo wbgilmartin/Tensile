@@ -909,18 +909,13 @@ def writeSolutionCall(solutionName, problemType):
   s += ", stream, numInputEvents, inputEvents, outputEvent )"
   return s
 
+##############################################################################
+# Min Naming
+##############################################################################
+def getSolutionAndKernelWriters(solutions, kernels):
 
-
-
-################################################################################
-# Write CMake
-################################################################################
-def writeCMake(outputPath, solutions, kernels, libraryStaticFiles, clientName ):
-  print1("# Writing Custom CMake")
-  ##############################################################################
-  # Min Naming
-  ##############################################################################
-  if globalParameters["ShortNames"] and not globalParameters["MergeFiles"] :
+  # if any kernels are assembly, append every ISA supported
+  if globalParameters["ShortNames"] and not globalParameters["MergeFiles"]:
     solutionSerialNaming = Solution.getSerialNaming(solutions)
     kernelSerialNaming = Solution.getSerialNaming(kernels)
   else:
@@ -935,6 +930,58 @@ def writeCMake(outputPath, solutions, kernels, libraryStaticFiles, clientName ):
       kernelMinNaming, kernelSerialNaming)
   kernelWriterAssembly = KernelWriterAssembly( \
       kernelMinNaming, kernelSerialNaming)
+
+  return (solutionWriter, kernelWriterSource, kernelWriterAssembly, kernelMinNaming, solutionMinNaming)
+
+
+def copyStaticFiles(outputPath):
+  if globalParameters["LegacyComponents"]:
+    libraryStaticFiles = [
+      "SolutionMapper.h",
+      "TensileTypes.h",
+      "tensile_bfloat16.h",
+      "KernelHeader.h",
+      "SolutionHelper.cpp",
+      "SolutionHelper.h",
+      "Tools.cpp",
+      "Tools.h" ]
+  else:
+    libraryStaticFiles = [
+      "TensileTypes.h",
+      "tensile_bfloat16.h",
+      "KernelHeader.h" ]
+
+  for fileName in libraryStaticFiles:
+    # copy file
+    shutil.copy( os.path.join(globalParameters["SourcePath"], fileName), \
+        outputPath )
+
+################################################################################
+# Write CMake
+################################################################################
+def writeCMake(outputPath, solutions, kernels, libraryStaticFiles, clientName ):
+  print1("# Writing Custom CMake")
+  ##############################################################################
+  # Min Naming
+  ##############################################################################
+  #if globalParameters["ShortNames"] and not globalParameters["MergeFiles"] :
+  #  solutionSerialNaming = Solution.getSerialNaming(solutions)
+  #  kernelSerialNaming = Solution.getSerialNaming(kernels)
+  #else:
+  #  solutionSerialNaming = None
+  #  kernelSerialNaming = None
+  #solutionMinNaming = Solution.getMinNaming(solutions)
+  #kernelMinNaming = Solution.getMinNaming(kernels)
+  #solutionWriter = SolutionWriter( \
+  #    solutionMinNaming, solutionSerialNaming, \
+  #    kernelMinNaming, kernelSerialNaming)
+  #kernelWriterSource = KernelWriterSource( \
+  #    kernelMinNaming, kernelSerialNaming)
+  #kernelWriterAssembly = KernelWriterAssembly( \
+  #    kernelMinNaming, kernelSerialNaming)
+
+  solutionWriter, kernelWriterSource, kernelWriterAssembly, _, _ = \
+    getSolutionAndKernelWriters(solutions, kernels)
 
   generatedFile = open(os.path.join(outputPath, "Generated.cmake"), "w")
   generatedFile.write(CMakeHeader)
@@ -969,8 +1016,8 @@ def writeCMake(outputPath, solutions, kernels, libraryStaticFiles, clientName ):
   generatedFile.write("set( TensileClient_SOURCE\n")
   for fileName in libraryStaticFiles:
     # copy file
-    shutil.copy( os.path.join(globalParameters["SourcePath"], fileName), \
-        outputPath )
+    #shutil.copy( os.path.join(globalParameters["SourcePath"], fileName), \
+    #    outputPath )
     # add file to cmake
     generatedFile.write("  ${CMAKE_SOURCE_DIR}/%s\n" % fileName)
   generatedFile.write("  )\n\n")
@@ -981,48 +1028,6 @@ def writeCMake(outputPath, solutions, kernels, libraryStaticFiles, clientName ):
   #      outputPath )
     # close generated cmake
   generatedFile.close()
-
-
-#def writeSolutionsAndKernelsForCodeObject(libraryWorkingPath, tensileSourcePath, problemTypes, \
-def writeSolutionsAndKernelsForCodeObject(libraryWorkingPath,  cxxCompiler, problemTypes, solutions): #, mergeFiles=False):
-  
-  # create solution writer and kernel writer
-  kernels = []
-  kernelsBetaOnly = []
-  for solution in solutions:
-    solutionKernels = solution.getKernels()
-    for kernel in solutionKernels:
-      if kernel not in kernels:
-        kernels.append(kernel)
-    solutionKernelsBetaOnly = solution.getKernelsBetaOnly()
-    for kernel in solutionKernelsBetaOnly:
-      if KernelWriter.getKernelNameBetaOnly(kernel) not in \
-          [KernelWriter.getKernelNameBetaOnly(k) for k in kernelsBetaOnly]:
-        kernelsBetaOnly.append(kernel)
-
-  if globalParameters["ShortNames"] and not globalParameters["MergeFiles"]:
-    solutionSerialNaming = Solution.getSerialNaming(solutions)
-    kernelSerialNaming = Solution.getSerialNaming(kernels)
-  else:
-    solutionSerialNaming = None
-    kernelSerialNaming = None
-  solutionMinNaming = Solution.getMinNaming(solutions)
-  kernelMinNaming = Solution.getMinNaming(kernels)
-  solutionWriter = SolutionWriter( \
-      solutionMinNaming, solutionSerialNaming, \
-      kernelMinNaming, kernelSerialNaming)
-  kernelWriterSource = KernelWriterSource( \
-      kernelMinNaming, kernelSerialNaming)
-  kernelWriterAssembly = KernelWriterAssembly( \
-      kernelMinNaming, kernelSerialNaming)
-
-  # write solutions and kernels
-  #problemTypes = list(logicData.keys())
-  codeObjectFiles = writeSolutionsAndKernels(libraryWorkingPath, cxxCompiler, problemTypes, \
-                                             solutions, kernels, kernelsBetaOnly, \
-                                             solutionWriter, kernelWriterSource, kernelWriterAssembly)
-  
-  return codeObjectFiles
 
 def generateKernelObjectsFromSolutions(solutions):
   # create solution writer and kernel writer
@@ -1040,6 +1045,49 @@ def generateKernelObjectsFromSolutions(solutions):
         kernelsBetaOnly.append(kernel)
 
   return (kernels, kernelsBetaOnly)
+
+#def writeSolutionsAndKernelsForCodeObject(libraryWorkingPath, tensileSourcePath, problemTypes, \
+def writeSolutionsAndKernelsForCodeObject(libraryWorkingPath, cxxCompiler, problemTypes, solutions): #, mergeFiles=False):
+  
+  # create solution writer and kernel writer
+  #kernels = []
+  #kernelsBetaOnly = []
+  #for solution in solutions:
+  #  solutionKernels = solution.getKernels()
+  #  for kernel in solutionKernels:
+  #    if kernel not in kernels:
+  #      kernels.append(kernel)
+  #  solutionKernelsBetaOnly = solution.getKernelsBetaOnly()
+  #  for kernel in solutionKernelsBetaOnly:
+  #    if KernelWriter.getKernelNameBetaOnly(kernel) not in \
+  #        [KernelWriter.getKernelNameBetaOnly(k) for k in kernelsBetaOnly]:
+  #      kernelsBetaOnly.append(kernel)
+
+  #if globalParameters["ShortNames"] and not globalParameters["MergeFiles"]:
+  #  solutionSerialNaming = Solution.getSerialNaming(solutions)
+  #  kernelSerialNaming = Solution.getSerialNaming(kernels)
+  #else:
+  #  solutionSerialNaming = None
+  #  kernelSerialNaming = None
+  #solutionMinNaming = Solution.getMinNaming(solutions)
+  #kernelMinNaming = Solution.getMinNaming(kernels)
+  #solutionWriter = SolutionWriter( \
+  #    solutionMinNaming, solutionSerialNaming, \
+  #    kernelMinNaming, kernelSerialNaming)
+  #kernelWriterSource = KernelWriterSource( \
+  #    kernelMinNaming, kernelSerialNaming)
+  #kernelWriterAssembly = KernelWriterAssembly( \
+  #    kernelMinNaming, kernelSerialNaming)
+
+  kernels, kernelsBetaOnly = generateKernelObjectsFromSolutions(solutions)
+  solutionWriter, kernelWriterSource, kernelWriterAssembly, _ , _ = getSolutionAndKernelWriters(solutions, kernels)
+  # write solutions and kernels
+  #problemTypes = list(logicData.keys())
+  codeObjectFiles = writeSolutionsAndKernels(libraryWorkingPath, cxxCompiler, problemTypes, \
+                                             solutions, kernels, kernelsBetaOnly, \
+                                             solutionWriter, kernelWriterSource, kernelWriterAssembly)
+  
+  return codeObjectFiles
 
 ################################################################################
 # Tensile Create Library
@@ -1104,8 +1152,8 @@ def TensileCreateLibrary():
   arguments["PackageLibrary"] = args.PackageLibrary
   arguments["LegacyComponents"] = args.LegacyComponents
   if args.new_client_only:
-    #arguments["NewClient"] = 2
-    arguments["NewClient"] = 0
+    arguments["NewClient"] = 2
+    #arguments["NewClient"] = 0
 
   assignGlobalParameters(arguments)
 
@@ -1194,39 +1242,42 @@ def TensileCreateLibrary():
   kernels, kernelsBetaOnly = generateKernelObjectsFromSolutions(solutions)
   # if any kernels are assembly, append every ISA supported
 
-  if globalParameters["ShortNames"] and not globalParameters["MergeFiles"]:
-    solutionSerialNaming = Solution.getSerialNaming(solutions)
-    kernelSerialNaming = Solution.getSerialNaming(kernels)
-  else:
-    solutionSerialNaming = None
-    kernelSerialNaming = None
-  solutionMinNaming = Solution.getMinNaming(solutions)
-  kernelMinNaming = Solution.getMinNaming(kernels)
-  solutionWriter = SolutionWriter( \
-      solutionMinNaming, solutionSerialNaming, \
-      kernelMinNaming, kernelSerialNaming)
-  kernelWriterSource = KernelWriterSource( \
-      kernelMinNaming, kernelSerialNaming)
-  kernelWriterAssembly = KernelWriterAssembly( \
-      kernelMinNaming, kernelSerialNaming)
+  #if globalParameters["ShortNames"] and not globalParameters["MergeFiles"]:
+  #  solutionSerialNaming = Solution.getSerialNaming(solutions)
+  #  kernelSerialNaming = Solution.getSerialNaming(kernels)
+  #else:
+  #  solutionSerialNaming = None
+  #  kernelSerialNaming = None
+  #solutionMinNaming = Solution.getMinNaming(solutions)
+  #kernelMinNaming = Solution.getMinNaming(kernels)
+  #solutionWriter = SolutionWriter( \
+  #    solutionMinNaming, solutionSerialNaming, \
+  #    kernelMinNaming, kernelSerialNaming)
+  #kernelWriterSource = KernelWriterSource( \
+  #    kernelMinNaming, kernelSerialNaming)
+  #kernelWriterAssembly = KernelWriterAssembly( \
+  #    kernelMinNaming, kernelSerialNaming)
 
+  solutionWriter, kernelWriterSource, kernelWriterAssembly, \
+    kernelMinNaming, _ = getSolutionAndKernelWriters(solutions, kernels)
 
-  if globalParameters["LegacyComponents"]:
-    libraryStaticFiles = [
-      "SolutionMapper.h",
-      "TensileTypes.h",
-      "tensile_bfloat16.h",
-      "KernelHeader.h",
-      "SolutionHelper.cpp",
-      "SolutionHelper.h",
-      "Tools.cpp",
-      "Tools.h" ]
-  else:
-    libraryStaticFiles = [
-      "TensileTypes.h",
-      "tensile_bfloat16.h",
-      "KernelHeader.h" ]
+  #if globalParameters["LegacyComponents"]:
+  #  libraryStaticFiles = [
+  #    "SolutionMapper.h",
+  #    "TensileTypes.h",
+  #    "tensile_bfloat16.h",
+  #    "KernelHeader.h",
+  #    "SolutionHelper.cpp",
+  #    "SolutionHelper.h",
+  #    "Tools.cpp",
+  #    "Tools.h" ]
+  #else:
+  #  libraryStaticFiles = [
+  #    "TensileTypes.h",
+  #    "tensile_bfloat16.h",
+  #    "KernelHeader.h" ]
 
+  copyStaticFiles(outputPath)
   # write cmake
   clientName = "LibraryClient"
   writeCMake(outputPath, solutions, kernels, libraryStaticFiles, clientName )

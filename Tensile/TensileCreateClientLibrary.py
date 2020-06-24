@@ -29,7 +29,8 @@ from .KernelWriterAssembly import KernelWriterAssembly
 from .KernelWriterSource import KernelWriterSource
 from .SolutionStructs import Solution, ProblemType, ProblemSizes
 from .SolutionWriter import SolutionWriter
-from .TensileCreateLibrary import writeSolutionsAndKernels, writeCMake
+from .TensileCreateLibrary import writeSolutionsAndKernels, writeCMake, generateKernelObjectsFromSolutions, \
+  copyStaticFiles, getSolutionAndKernelWriters
 from .SolutionLibrary import MasterSolutionLibrary
 from .Contractions import ProblemType as ContractionsProblemType
 
@@ -82,60 +83,37 @@ def runNewClient(scriptPath, clientParametersPath, clientBuildDir=None):
 ################################################################################
 def writeBenchmarkClientFiles(libraryWorkingPath, tensileSourcePath, solutions, cxxCompiler, mergeFiles=False):
 
-  filesToCopy = [
-        "CMakeLists.txt",
-        "TensileTypes.h",
-        "tensile_bfloat16.h",
-        "KernelHeader.h",
-        ]
+  copyStaticFiles(libraryWorkingPath)
+  #filesToCopy = [
+  #      "CMakeLists.txt",
+  #      "TensileTypes.h",
+  #      "tensile_bfloat16.h",
+  #      "KernelHeader.h",
+  #      ]
 
-  for f in filesToCopy:
-      shutil.copy(os.path.join(tensileSourcePath, f),libraryWorkingPath)
+  #for f in filesToCopy:
+  #    shutil.copy(os.path.join(tensileSourcePath, f),libraryWorkingPath)
 
-  if not mergeFiles:
-    ensurePath(os.path.join(libraryWorkingPath, "Solutions"))
-    ensurePath(os.path.join(libraryWorkingPath, "Kernels"))
+  #if not mergeFiles:
+  #  ensurePath(os.path.join(libraryWorkingPath, "Solutions"))
+  #  ensurePath(os.path.join(libraryWorkingPath, "Kernels"))
 
-  ##############################################################################
-  # Min Naming
-  ##############################################################################
-  kernels = []
-  kernelsBetaOnly = []
-  for solution in solutions:
-    solutionKernels = solution.getKernels()
-    for kernel in solutionKernels:
-      if kernel not in kernels:
-        kernels.append(kernel)
-    solutionKernelsBetaOnly = solution.getKernelsBetaOnly()
-    for kernel in solutionKernelsBetaOnly:
-      if kernel not in kernelsBetaOnly:
-        kernelsBetaOnly.append(kernel)
+  kernels, kernelsBetaOnly = generateKernelObjectsFromSolutions(solutions)
 
-  solutionSerialNaming = Solution.getSerialNaming(solutions)
-  kernelSerialNaming = Solution.getSerialNaming(kernels)
-  solutionMinNaming = Solution.getMinNaming(solutions)
-  kernelMinNaming = Solution.getMinNaming(kernels)
-  solutionWriter = SolutionWriter( \
-      solutionMinNaming, solutionSerialNaming, \
-      kernelMinNaming, kernelSerialNaming)
-  kernelWriterSource = KernelWriterSource( \
-      kernelMinNaming, kernelSerialNaming)
-  kernelWriterAssembly = KernelWriterAssembly( \
-      kernelMinNaming, kernelSerialNaming)
+  solutionWriter, kernelWriterSource, kernelWriterAssembly, \
+    kernelMinNaming, _ = getSolutionAndKernelWriters(solutions, kernels)
 
   # write solution, kernels and CMake
   problemType = solutions[0]["ProblemType"]
   codeObjectFiles = writeSolutionsAndKernels( \
     libraryWorkingPath, cxxCompiler, [problemType], solutions, kernels, kernelsBetaOnly, \
     solutionWriter, kernelWriterSource, kernelWriterAssembly, errorTolerant=True )
-
-
     
   newLibraryDir = ensurePath(os.path.join(libraryWorkingPath, 'library'))
   newLibraryFile = os.path.join(newLibraryDir, "TensileLibrary.yaml")
   newLibrary = SolutionLibrary.MasterSolutionLibrary.BenchmarkingLibrary(solutions)
   newLibrary.applyNaming(kernelMinNaming)
-  #YAMLIO.write(newLibraryFile, Utils.state(newLibrary))
+
   LibraryIO.YAMLWriter().write(newLibraryFile, Utils.state(newLibrary))
 
   return (codeObjectFiles, newLibrary)
@@ -214,7 +192,7 @@ def getValidSolutionsForStep(benchmarkStep, benchmarkProblemType):
 
   return solutionList
 
-
+#writeSolutionsAndKernelsForCodeObject(libraryWorkingPath, cxxCompiler, problemTypes, solutions)
 def WriteClientLibraryFromSolutions(solutionList, tensileSourcePath, libraryWorkingPath):
 
   firstSolution = deepcopy(solutionList[0])
