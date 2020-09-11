@@ -1,0 +1,4 @@
+- { rocblas_function: "rocblas_sgemm", transA: 'N', transB: 'N', M: 1024, N: 1264, K: 345, lda: 1024, ldb: 345, ldc: 1024, cold_iters: 2, iters: 10 }
+- { rocblas_function: "rocblas_sgemm", transA: 'N', transB: 'N', M: 1025, N: 1064, K: 148, lda: 1025, ldb: 148, ldc: 1025, cold_iters: 2, iters: 10 }
+- { rocblas_function: "rocblas_sgemm", transA: 'N', transB: 'N', M: 2450, N: 512, K: 1023, lda: 2450, ldb: 1023, ldc: 2450, cold_iters: 2, iters: 10 }
+- { rocblas_function: "rocblas_sgemm", transA: 'N', transB: 'N', M: 2345, N: 2222, K: 345, lda: 2345, ldb: 345, ldc: 2345, cold_iters: 2, iters: 10 }
