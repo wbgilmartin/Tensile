@@ -89,8 +89,9 @@ namespace Tensile
             return rv;
         }
 
-        virtual std::shared_ptr<MySolution>
-            findBestSolution(MyProblem const& problem, Hardware const& hardware) const override
+        virtual std::shared_ptr<MySolution> findBestSolution(MyProblem const& problem,
+                                                             Hardware const& hardware,
+                                                             double* fitness = nullptr) const override
         {
             const bool debug = Debug::Instance().printPropertyEvaluation();
 
