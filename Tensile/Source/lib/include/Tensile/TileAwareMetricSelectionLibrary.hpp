@@ -170,60 +170,62 @@ namespace Tensile
                       = solution->computeProblemScore(hardware, M, N, K, NumBatches, 0, 0, 0, 0);
                   it++;
 
-                  double metric = std::numeric_limits<double>::max();
-                  if(ppReference.tile0Granularity > 0.0 && pp.tile0Granularity > 0.0)
-                  {
+                  double metric = 0.0; //std::numeric_limits<double>::max();
+                  //if(ppReference.tile0Granularity > 0.0 && pp.tile0Granularity > 0.0)
+                  //{
                       metric = abs(log(ppReference.tile0Granularity) - log(pp.tile0Granularity));
-                  }
-                  if(ppReference.tile0Granularity > 0.0 && pp.tile0Granularity > 0.0)
-                  {
-                      if(metric < std::numeric_limits<double>::max())
-                      {
+                  //}
+                  //if(ppReference.tile0Granularity > 0.0 && pp.tile0Granularity > 0.0)
+                  //{
+                  //    if(metric < std::numeric_limits<double>::max())
+                  //    {
                           metric += abs(log(ppReference.tile1Granularity) - log(pp.tile1Granularity));
-                      }
-                      else
-                      {
-                          metric = abs(log(ppReference.tile1Granularity) - log(pp.tile1Granularity));
-                      }
-                  }
-                  if(ppReference.suCuGranularity > 0.0 && pp.suCuGranularity > 0.0)
-                  {
-                      if(metric < std::numeric_limits<double>::max())
-                      {
+                  //    }
+                  //    else
+                  //    {
+                  //        metric = abs(log(ppReference.tile1Granularity) - log(pp.tile1Granularity));
+                  //    }
+                  //}
+                  //if(ppReference.suCuGranularity > 0.0 && pp.suCuGranularity > 0.0)
+                  //{
+                  //    if(metric < std::numeric_limits<double>::max())
+                  //    {
                           metric += abs(log(ppReference.suCuGranularity) - log(pp.suCuGranularity));
-                      }
-                      else
-                      {
-                          metric = abs(log(ppReference.suCuGranularity) - log(pp.suCuGranularity));
-                      }
-                  }
-                  if(ppReference.suWaveGranularity > 0.0 && pp.suWaveGranularity > 0.0)
-                  {
-                      if(metric < std::numeric_limits<double>::max())
-                      {
+                  //    }
+                  //    else
+                  //    {
+                  //        metric = abs(log(ppReference.suCuGranularity) - log(pp.suCuGranularity));
+                  //    }
+                  //}
+                  //if(ppReference.suWaveGranularity > 0.0 && pp.suWaveGranularity > 0.0)
+                  //{
+                  //    if(metric < std::numeric_limits<double>::max())
+                  //    {
                           metric
                               += abs(log(ppReference.suWaveGranularity) - log(pp.suWaveGranularity));
-                      }
-                      else
-                      {
-                          metric
-                              = abs(log(ppReference.suWaveGranularity) - log(pp.suWaveGranularity));
-                      }
-                  }
+                  //    }
+                  //    else
+                  //    {
+                  //        metric
+                  //            = abs(log(ppReference.suWaveGranularity) - log(pp.suWaveGranularity));
+                  //    }
+                  //}
 
-                  if(ppReference.summationPerformance > 0.0 && pp.summationPerformance > 0.0)
-                  {
-                      if(metric < std::numeric_limits<double>::max())
-                      {
+                  //if(ppReference.summationPerformance > 0.0 && pp.summationPerformance > 0.0)
+                  //{
+                  //    if(metric < std::numeric_limits<double>::max())
+                  //    {
                           metric
-                              += abs(log(ppReference.summationPerformance) - log(pp.summationPerformance));
-                      }
-                      else
-                      {
-                          metric
-                              = abs(log(ppReference.summationPerformance) - log(pp.summationPerformance));
-                      }
-                  }
+                              += abs(ppReference.summationPerformance - pp.summationPerformance);
+                              //+= abs(log(ppReference.summationPerformance) - log(pp.summationPerformance));
+                  //    }
+                  //    else
+                  //    {
+                  //        metric
+                  //            = abs(ppReference.summationPerformance - pp.summationPerformance);
+                              //= abs(log(ppReference.summationPerformance) - log(pp.summationPerformance));
+                  //    }
+                  //}
 
                   if(metric < bestDistance)
                   {
