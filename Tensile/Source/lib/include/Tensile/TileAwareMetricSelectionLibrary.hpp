@@ -166,73 +166,99 @@ namespace Tensile
                       = solution->computeProblemScore(
                           hardware, model_M, model_N, model_K, model_batchSize, 0, 0, 0, 0);
 
+                  if(debug) {
+                     std::cout << "granulatity for reference: " << ppReference << std::endl;
+                  }
+
                   ContractionSolution::TAMetricProblemScore pp
                       = solution->computeProblemScore(hardware, M, N, K, NumBatches, 0, 0, 0, 0);
+                  if(debug) {
+                     std::cout << "granulatity for problem: " << pp << std::endl;
+                  }
+
                   it++;
 
                   double metric = 0.0; //std::numeric_limits<double>::max();
-                  //if(ppReference.tile0Granularity > 0.0 && pp.tile0Granularity > 0.0)
-                  //{
-                      metric = abs(log(ppReference.tile0Granularity) - log(pp.tile0Granularity));
-                  //}
-                  //if(ppReference.tile0Granularity > 0.0 && pp.tile0Granularity > 0.0)
-                  //{
-                  //    if(metric < std::numeric_limits<double>::max())
-                  //    {
-                          metric += abs(log(ppReference.tile1Granularity) - log(pp.tile1Granularity));
-                  //    }
-                  //    else
-                  //    {
-                  //        metric = abs(log(ppReference.tile1Granularity) - log(pp.tile1Granularity));
-                  //    }
-                  //}
-                  //if(ppReference.suCuGranularity > 0.0 && pp.suCuGranularity > 0.0)
-                  //{
-                  //    if(metric < std::numeric_limits<double>::max())
-                  //    {
-                          metric += abs(log(ppReference.suCuGranularity) - log(pp.suCuGranularity));
-                  //    }
-                  //    else
-                  //    {
-                  //        metric = abs(log(ppReference.suCuGranularity) - log(pp.suCuGranularity));
-                  //    }
-                  //}
-                  //if(ppReference.suWaveGranularity > 0.0 && pp.suWaveGranularity > 0.0)
-                  //{
-                  //    if(metric < std::numeric_limits<double>::max())
-                  //    {
-                          metric
-                              += abs(log(ppReference.suWaveGranularity) - log(pp.suWaveGranularity));
-                  //    }
-                  //    else
-                  //    {
-                  //        metric
-                  //            = abs(log(ppReference.suWaveGranularity) - log(pp.suWaveGranularity));
-                  //    }
-                  //}
+  
+                  double tile0GranularityDim = abs(log(ppReference.tile0Granularity) - log(pp.tile0Granularity));
+                  metric = tile0GranularityDim; 
 
-                  //if(ppReference.summationPerformance > 0.0 && pp.summationPerformance > 0.0)
-                  //{
-                  //    if(metric < std::numeric_limits<double>::max())
-                  //    {
-                          metric
-                              += abs(ppReference.summationPerformance - pp.summationPerformance);
-                              //+= abs(log(ppReference.summationPerformance) - log(pp.summationPerformance));
-                  //    }
-                  //    else
-                  //    {
-                  //        metric
-                  //            = abs(ppReference.summationPerformance - pp.summationPerformance);
-                              //= abs(log(ppReference.summationPerformance) - log(pp.summationPerformance));
-                  //    }
-                  //}
+                  double tile1GranularityDim = abs(log(ppReference.tile1Granularity) - log(pp.tile1Granularity));
+                  metric += tile1GranularityDim;
 
+                  double natCuGranularityDim = abs(log(ppReference.natCuGranularity) - log(pp.natCuGranularity));
+                  metric += natCuGranularityDim;
+
+                  double suCuGranularityDim = abs(log(ppReference.suCuGranularity) - log(pp.suCuGranularity));
+                  metric += suCuGranularityDim;
+
+                  double suWaveGranularityDim = abs(log(ppReference.suWaveGranularity) - log(pp.suWaveGranularity));
+                  metric += suWaveGranularityDim;
+
+                  double natTilesPerCuDim = abs(log(ppReference.natTilesPerCu) - log(pp.natTilesPerCu));
+                  metric += natTilesPerCuDim;
+
+                  double suTilesPerCuDim = abs(log(ppReference.suTilesPerCu) - log(pp.suTilesPerCu));
+                  metric += suTilesPerCuDim;
+
+                  double summationPerformanceDim = abs(ppReference.summationPerformance - pp.summationPerformance);
+                  metric += summationPerformanceDim;
                   if(metric < bestDistance)
                   {
                       bestDistance = metric;
                       bestSolution = solution;
                   }
                 }
+            }
+
+            /*double tile0GranularityDim = abs(log(ppReference.tile0Granularity) - log(pp.tile0Granularity));
+                  if(debug) {
+                      std::cout << " tile0GranularityDim=" << tile0GranularityDim << std::endl;
+                  }
+                  metric = abs(tile0GranularityDim; 
+                  double tile1GranularityDim = abs(log(ppReference.tile1Granularity) - log(pp.tile1Granularity));
+                  if(debug) {
+                      std::cout << " tile1GranularityDim=" << tile0GranularityDim << std::endl;
+                  }
+                  metric += abs(tile1GranularityDim;
+                  double natCuGranularityDim = abs(log(ppReference.natCuGranularity) - log(pp.natCuGranularity));
+                  if(debug) {
+                      std::cout << " natCuGranularityDim=" << tile0GranularityDim << std::endl;
+                  }
+                  metric += abs(natCuGranularityDim;
+                  double suCuGranularityDim = abs(log(ppReference.suCuGranularity) - log(pp.suCuGranularity));
+                  if(debug) {
+                      std::cout << " suCuGranularityDim=" << tile0GranularityDim << std::endl;
+                  }
+                  metric += abs(suCuGranularityDim;
+                  double suWaveGranularityDim = abs(log(ppReference.suWaveGranularity) - log(pp.suWaveGranularity));
+                  if(debug) {
+                      std::cout << " suWaveGranularityDim=" << tile0GranularityDim << std::endl;
+                  }
+                  metric += abs(suWaveGranularityDim;
+                  double natTilesPerCuDim = abs(log(ppReference.natTilesPerCu) - log(pp.natTilesPerCu));
+                  if(debug) {
+                      std::cout << " natTilesPerCuDim=" << tile0GranularityDim << std::endl;
+                  }
+                  metric += natTilesPerCuDim;
+                  double suTilesPerCuDim = abs(log(ppReference.suTilesPerCu) - log(pp.suTilesPerCu));
+                  if(debug) {
+                      std::cout << " suTilesPerCuDim=" << tile0GranularityDim << std::endl;
+                  }
+                  metric += suTilesPerCuDim;
+                  double summationPerformanceDim = abs(ppReference.summationPerformance - pp.summationPerformance);
+                  if(debug) {
+                      std::cout << " summationPerformanceDim=" << tile0GranularityDim << std::endl;
+                  }
+                  metric += summationPerformanceDim;
+                  if(debug) {
+                      std::cout << " summationPerformanceDim=" << tile0GranularityDim << std::endl;
+                  }*/
+
+            if (debug) {
+                if(debug) {
+                      std::cout << " best distance=" << bestDistance << std::endl;
+                  }
             }
             return bestSolution;
         }

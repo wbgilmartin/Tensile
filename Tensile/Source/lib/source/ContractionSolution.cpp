@@ -995,7 +995,7 @@ namespace Tensile
         pp.tile1Granularity = pp.numTiles1 / ceil(pp.numTiles1);
 
         pp.totalTiles = ceil(pp.numTiles0) * ceil(pp.numTiles1);
-
+        pp.natTilesPerCu = NumBatches * pp.totalTiles / NumCUs;
         pp.suTilesPerCu    = (pp.totalTiles * GlobalSplitU) / NumCUs;
         pp.suCuGranularity = pp.suTilesPerCu / ceil(pp.suTilesPerCu);
 
@@ -1021,6 +1021,13 @@ namespace Tensile
         //{
         //    //std::cout << "no go, try again." << std::endl;
         //}
+
+        double nat_tiles_per_cu = NumBatches * ceil(pp.numTiles0) * ceil(pp.numTiles1) / NumCUs;
+        pp.natCuGranularity = ceil(nat_tiles_per_cu) * ceil(nat_tiles_per_cu) / NumCUs;
+
+        ///pp.suCuGranularity = CEIL(tiles0) * CEIL(tiles1) *GSU * LSU / num_cus
+
+
         auto modelIntercept = linearModel.find("intercept");
         if (modelIntercept != linearModel.end()) 
         {
@@ -1031,7 +1038,7 @@ namespace Tensile
         //{
         //    std::cout << "no go, try again." << std::endl;
         //}
-        
+
         double sum_value = K;
         double sum_perf0 = sum_value / (intercept + (slope * sum_value));
         pp.summationPerformance = 1000.0 * sum_perf0 / 10894.0;  // = MAX_PERF; // TODO: compute ideal perf  instead of MAX_PERF
@@ -1259,10 +1266,16 @@ namespace Tensile
                       << " totalGranularity=" << pp.totalGranularity
                       << " tile0Granularity=" << pp.tile0Granularity
                       << " tile1Granularity=" << pp.tile1Granularity
-                      << " cuGranularity=" << pp.cuGranularity
-                      << " waveGranularity=" << pp.waveGranularity
+                      << " natCuGranularity=" << pp.natCuGranularity
+                      << " natTilesPerCu=" << pp.natTilesPerCu
+                      << " suTilesPerCu=" << pp.suTilesPerCu
+                      << " suCuGranularity=" << pp.suCuGranularity
+                      << " waves=" << pp.waves
+                      << " suWavesPerSimdx2=" << pp.suWavesPerSimdx2
+                      << " suWaveGranularity=" << pp.suWaveGranularity
+                      << " summation performance=" << pp.summationPerformance;
 
-                      << " speedGFlops=" << pp.speedGFlops;
+                      //<< " speedGFlops=" << pp.speedGFlops;
 
         //<< " staticModel=[ " << pp.staticModel << " ]";
     }

@@ -118,9 +118,10 @@ namespace Tensile
             //! Granularity is measured 0..1 with 1.0 meaning no granularity loss
             double tile0Granularity  = 0.0; // loss due to tile0
             double tile1Granularity  = 0.0;
-            double cuGranularity     = 0.0;
-            double waveGranularity   = 0.0;
+            double natCuGranularity  = 0.0;
+            //double waveGranularity   = 0.0;
             double totalGranularity  = 0.0;
+            double natTilesPerCu     = 0.0;
             double suTilesPerCu      = 0.0;
             double suCuGranularity   = 0.0;
             double waves             = 0.0;
@@ -321,4 +322,7 @@ namespace Tensile
     std::ostream& operator<<(std::ostream&                                    stream,
                              ContractionSolution::ProjectedPerformance const& spm);
     std::ostream& operator<<(std::ostream& stream, BufferLoadCheckPacket const& st);
+
+    std::ostream& operator<<(std::ostream&                                    stream,
+                             ContractionSolution::TAMetricProblemScore const& pp);
 } // namespace Tensile

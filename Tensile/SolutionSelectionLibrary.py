@@ -19,6 +19,8 @@
 # CTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ################################################################################
 
+import sys
+
 from .Common import printExit
 from .CSVReader import readCSV
 from .SolutionStructs import Solution
@@ -245,63 +247,113 @@ def analyzeSolutionSelectionForMetric(problemType, selectionFileNameList, numSol
     solutionBaseKeys = []
 
     for solution in solutions:
-      baseKey = getSolutionBaseKey(solution)
+      #baseKey = getSolutionBaseKey(solution)
+      macroTile0 = solution["MacroTile0"]
+      macroTile1 = solution["MacroTile1"]
+      globalSplitU = solution["GlobalSplitU"]
+      wg0 = solution["WorkGroup"][0]
+      wg1 = solution["WorkGroup"][1]
+      localSplitU = solution["WorkGroup"][2]
+      depthU = solution["DepthU"]
+      #baseKey = "%s_%s_%s_%s_%s_%s_%s" % (macroTile0, macroTile1, wg0, wg1, localSplitU, globalSplitU, depthU)
+      baseKey = "%s_%s_%s_%s" % (macroTile0, macroTile1, wg0, wg1)
+
       solutionBaseKeys.append(baseKey)
 
     selectionfFile = open(selectionFileName, "r")
     csvFile = csv.reader(selectionfFile)
 
     firstRow = 0
-    keySizeMap = {}
+    #keySizeMap = {}
+    #bestSolutionMap = {}
     for row in csvFile:
       if firstRow == 0:
         firstRow += 1
       else:
-        #bestSolution = None
-        #bestValue = 0.0
         sumationId = row[summationIndex].strip()
         size = row[1:5]
         sizeId = (int(size[0].strip()),int(size[1].strip()),int(size[2].strip()),int(size[3].strip()))
-        #key = "%s_%s_%s_%s" % (sizeId[0], sizeId[1], sizeId[2], sizeId[3])
+        sizeKey = "%s_%s_%s_%s" % (sizeId[0], sizeId[1], sizeId[2], sizeId[3])
         #keySizeMap[key] = sizeId
         solutionIndex = 0
+        #bestSolution = None
+        #bestValue = sys.float_info.max
+        #bestSize = None
+        #bestKey = None
+        #bestParams = None
         for i in range(solutionStartIdx, rowLength):
           #baseKey = solutionBaseKeys[solutionIndex]
           baseKey = solutionBaseKeys[solutionIndex]
-          key = "%s_%s" % (baseKey, sumationId)
-          keySizeMap[key] = sizeId
+          #key = "%s_%s" % (baseKey, sumationId)
+          problemKey = "%s_%s" % (baseKey, sizeKey)
+
+          #print ("The problem key is: %s" % problemKey)
+          #keySizeMap[key] = sizeId
           solution = solutions[solutionIndex]
+
+          #macroTile0 = solution["MacroTile0"]
+          #macroTile1 = solution["MacroTile1"]
+          #globalSplitU = solution["GlobalSplitU"]
+          #localSplitU = solution["WorkGroup"][2]
+
+
           solutionIndex += 1
           value = float(row[i])
           if not solution in solutionsHash:
             dataMap = {}
             solutionsHash[solution] = dataMap
+          #  bestKey = problemKey
+          #  bestSize = sizeId
+          #if bestValue > value:
+          #  bestSolution = solution
+          #  bestValue = value
+          #  bestKey = problemKey
+          #  bestSize = sizeId
 
           solutionsHash[solution][sumationId] = value
 
-          #if value > bestValue:
+          #if value < bestValue:
           #  bestSolution = solution
           #  bestValue = value
+          #  bestSize = bestSize
+          #  bestKey = problemKey
           #updateIfGT(solutionsHash[solution], sumationId, value)
           #updateIfGT(solutionsHash[solution], sizeId, value)
-          if not key in performanceMap:
-            performanceMap[key] = (solution, value)
+          #if not key in performanceMap:
+          if not problemKey in performanceMap:
+            performanceMap[problemKey] = (solution, value, sizeId)
+            print ("in compute loop: %s" % problemKey)
           else:
-            _,valueOld = performanceMap[key]
+            _,valueOld,_ = performanceMap[problemKey]
             if value > valueOld:
-              performanceMap[key] = (solution, value)
+              performanceMap[problemKey] = (solution, value, sizeId)
+              print ("in compute loop: %s" % problemKey)
         #performanceMap[key] = (bestSolution, bestValue)
         #validSolutions.append((bestSolution, solutionsHash[bestSolution], sizeId))
-
+        #bestSolutionMap[bestKey] = (bestSize, bestSolution, bestValue)
+          #if not problemKey in bestSolutionMap:
+          #  bestSolutionMap[problemKey] = (solution, value )
 
   #validSolutions = []
   #validSolutionSet = set([])
 
   for key in performanceMap:
-    validSolution, _ = performanceMap[key]
+
+    print ("int Construction loop: %s" % key)
+  #for key in bestSolutionMap:
+    #validSolution, _ = performanceMap[key]
+    validSolution, _, validSize = performanceMap[key]
+    #validSize, validSolution, _ = bestSolutionMap[key]
     dataMap = solutionsHash[validSolution]
-    validSize = keySizeMap[key]
-    validSolutions.append((validSolution, dataMap, validSize))
+    #validSize = keySizeMap[key]
+    macroTile0 = validSolution["MacroTile0"]
+    macroTile1 = validSolution["MacroTile1"]
+    globalSplitU = validSolution["GlobalSplitU"]
+    localSplitU = validSolution["WorkGroup"][2]
+    validRep = (validSize[0],validSize[1], validSize[2], validSize[3], macroTile0, macroTile1, globalSplitU, localSplitU)
+    #validParams = (macroTile0, macroTile1, globalSplitU, localSplitU)
+    #validSolutions.append((validSolution, dataMap, validSize, validParams))
+    validSolutions.append((validSolution, dataMap, validRep))
   #  #validSolutionSet.add(solution)
 
   #for validSolution in validSolutionSet:
