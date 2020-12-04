@@ -81,9 +81,12 @@ def analyzeProblemType( problemType, problemSizeGroups, inputParameters ):
 
   ######################################
   # Create Logic Analyzer
+
+  #print ("Before LogicAnalyzer")
   logicAnalyzer = LogicAnalyzer( problemType, problemSizesList, solutionsList, \
       dataFileNameList, inputParameters)
 
+  #print ("after LogicAnalyzer")
   selectionSolutionsIdsList = None
   selectionSolutions = None
 
@@ -129,8 +132,14 @@ def analyzeProblemType( problemType, problemSizeGroups, inputParameters ):
   if enableTileSelection:
     if globalParameters["NewClient"] == 2:
       if selectionModel == "TileAwareMetricSelection":
+        validSolutionslist = []
+        for vsln in logicAnalyzer.solutions:
+          validSolutionslist.append(vsln)
+
+        #validSelectionSolutions = SolutionSelectionLibrary.analyzeSolutionSelectionForMetric(problemType, selectionFileNameList, \
+        #    logicAnalyzer.numSolutionsPerGroup,  logicAnalyzer.solutionGroupMap, solutionsList)
         validSelectionSolutions = SolutionSelectionLibrary.analyzeSolutionSelectionForMetric(problemType, selectionFileNameList, \
-            logicAnalyzer.numSolutionsPerGroup,  logicAnalyzer.solutionGroupMap, solutionsList)
+            logicAnalyzer.numSolutionsPerGroup,  logicAnalyzer.solutionGroupMap, solutionsList, validSolutionslist)
       else:
         validSelectionSolutions = SolutionSelectionLibrary.analyzeSolutionSelection(problemType, selectionFileNameList, \
             logicAnalyzer.numSolutionsPerGroup,  logicAnalyzer.solutionGroupMap, solutionsList)
@@ -192,9 +201,9 @@ def analyzeProblemType( problemType, problemSizeGroups, inputParameters ):
         linearModel = {"slope": sumsweep_model[0].item(), "intercept": sumsweep_model[1].item()}
         theSolution["LinearModel"] = linearModel
 
-        theSize = list(validSelectionSolution[2])
+        #theSize = list(validSelectionSolution[2])
         #theSolution["sizeId"] = theSize
-        solutionSelectionModel.append([theSize, theSolutionIndex])
+        #solutionSelectionModel.append([theSize, theSolutionIndex])
         #print(theSize)
  
     # set of solutions that are part of the tile aware model and 
@@ -1521,9 +1530,11 @@ def generateLogic(config, benchmarkDataPath, libraryLogicPath):
           dataFileName, solutionsFileName, selectionFileName, solutions) )
 
   for problemType in problemTypes:
+    print ("got to problemType 1")
     logicTuple = analyzeProblemType( problemType, problemTypes[problemType], \
         analysisParameters)
 
+    print ("got to problemTye 2")
     LibraryIO.configWriter("yaml").writeLibraryLogicForSchedule(globalParameters["WorkingPath"], \
         analysisParameters["ScheduleName"], analysisParameters["ArchitectureName"], \
         analysisParameters["DeviceNames"], logicTuple)

@@ -133,6 +133,14 @@ namespace Tensile
 
             double summationPerformance = 0.0;
 
+            double M;
+            double N;
+            double K;
+            double MT0;
+            double MT1;
+            double GSU;
+            double LSU;
+
             //StaticTAMetricPerformanceModel staticModel;
         };
 

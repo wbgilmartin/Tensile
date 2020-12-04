@@ -977,6 +977,12 @@ namespace Tensile
         double wavefrontSize = 64; //defaults to 64
         double simdPerCu     = 4;
 
+        pp.M = M;
+        pp.N = N;
+        pp.K = K;
+        pp.MT0 = MT0;
+        pp.MT1 = MT1;
+
         AMDGPU const* pAMDGPU = dynamic_cast<AMDGPU const*>(&hardware);
         if(pAMDGPU != nullptr)
         {
@@ -987,6 +993,9 @@ namespace Tensile
 
         double GlobalSplitU = sizeMapping.globalSplitU;
         double LocalSplitU  = sizeMapping.workGroupSize.z;
+
+        pp.GSU = GlobalSplitU;
+        pp.LSU = LocalSplitU;
 
         pp.numTiles0 = M / MT0;
         pp.numTiles1 = N / MT1;
@@ -1260,7 +1269,10 @@ namespace Tensile
     std::ostream& operator<<(std::ostream&                                    stream,
                              ContractionSolution::TAMetricProblemScore const& pp)
     {
-        return stream << " numTiles0=" << pp.numTiles0 << " numTiles1=" << pp.numTiles1
+        return stream << " M=" << pp.M << " N=" << pp.N << " K=" << pp.K
+                      << " MT0=" << pp.MT0 << " MT1=" << pp.MT1
+                      << " GSU=" << pp.GSU << " LSU=" << pp.LSU
+                      << " numTiles0=" << pp.numTiles0 << " numTiles1=" << pp.numTiles1
                       << " tilesPerCu=" << pp.tilesPerCu
 
                       << " totalGranularity=" << pp.totalGranularity

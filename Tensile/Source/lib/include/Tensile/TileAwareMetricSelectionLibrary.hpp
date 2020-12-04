@@ -134,17 +134,34 @@ namespace Tensile
             double                      bestDistance = std::numeric_limits<double>::max();
             std::shared_ptr<MySolution> bestSolution;
 
-            auto it = modelProblems.begin();
+            ContractionSolution::TAMetricProblemScore bestppReference;
+            ContractionSolution::TAMetricProblemScore bestpp;
 
-            while(it != modelProblems.end())
+            //auto it = modelProblems.begin();
+
+
+            //std::map<std::vector<size_t>, int>::iterator it;
+
+            //while(it != modelProblems.end())
+
+            for (auto it = exactMap.begin(); it != exactMap.end(); ++it)
             {
-                size_t model_M         = (size_t)it->problem[0];
-                size_t model_N         = (size_t)it->problem[1];
-                size_t model_batchSize = (size_t)it->problem[2];
-                size_t model_K         = (size_t)it->problem[3];
+                std::vector<size_t> model_size = it->first;
+                //int solution_index = it->second;
+
+                //size_t model_M         = (size_t)it->problem[0];
+                //size_t model_N         = (size_t)it->problem[1];
+                //size_t model_batchSize = (size_t)it->problem[2];
+                //size_t model_K         = (size_t)it->problem[3];
+
+                size_t model_M         = model_size[0];
+                size_t model_N         = model_size[1];
+                size_t model_batchSize = model_size[2];
+                size_t model_K         = model_size[3];
 
                 //std::cout << "this is a test print me." << std::endl;
-                size_t solution_id = it->solution_id;
+                //size_t solution_id = it->solution_id;
+                size_t solution_id = it->second;
 
                 auto slnIter = solutions.find(solution_id);
                 if(slnIter == solutions.end())
@@ -166,15 +183,15 @@ namespace Tensile
                       = solution->computeProblemScore(
                           hardware, model_M, model_N, model_K, model_batchSize, 0, 0, 0, 0);
 
-                  if(debug) {
-                     std::cout << "granulatity for reference: " << ppReference << std::endl;
-                  }
+                  //if(debug) {
+                  //   std::cout << "granulatity for reference: " << ppReference << std::endl;
+                  //}
 
                   ContractionSolution::TAMetricProblemScore pp
                       = solution->computeProblemScore(hardware, M, N, K, NumBatches, 0, 0, 0, 0);
-                  if(debug) {
-                     std::cout << "granulatity for problem: " << pp << std::endl;
-                  }
+                  //if(debug) {
+                  //   std::cout << "granulatity for problem: " << pp << std::endl;
+                  //}
 
                   it++;
 
@@ -207,6 +224,8 @@ namespace Tensile
                   {
                       bestDistance = metric;
                       bestSolution = solution;
+                      bestppReference = ppReference;
+                      bestpp = pp;
                   }
                 }
             }
@@ -259,6 +278,10 @@ namespace Tensile
                 if(debug) {
                       std::cout << " best distance=" << bestDistance << std::endl;
                   }
+            }
+            if(debug) {
+                     std::cout << "granulatity best reference: " << bestppReference << std::endl;
+                     std::cout << "granularity best solution:" << bestpp << std::endl;
             }
             return bestSolution;
         }

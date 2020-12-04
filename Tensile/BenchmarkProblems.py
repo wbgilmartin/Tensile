@@ -532,14 +532,14 @@ def computeIdealSizes(problemType, solutions, solutionSummationSizes):
           idealSize = {"Exact": [idealM, idealN, idealK]}
           idealSizes.append(idealSize)
           
-    idealSizes.append({"Exact": [500, 680, 1, 3700]})
-    idealSizes.append({"Exact": [525, 680, 1, 3700]})
-    idealSizes.append({"Exact": [500, 710, 1, 3700]})
-    idealSizes.append({"Exact": [525, 710, 1, 3700]})
-    idealSizes.append({"Exact": [500, 680, 1, 3740]})
-    idealSizes.append({"Exact": [525, 680, 1, 3740]})
-    idealSizes.append({"Exact": [500, 710, 1, 3740]})
-    idealSizes.append({"Exact": [525, 710, 1, 3740]})
+    #idealSizes.append({"Exact": [500, 680, 1, 3700]})
+    #idealSizes.append({"Exact": [525, 680, 1, 3700]})
+    #idealSizes.append({"Exact": [500, 710, 1, 3700]})
+    #idealSizes.append({"Exact": [525, 710, 1, 3700]})
+    #idealSizes.append({"Exact": [500, 680, 1, 3740]})
+    #idealSizes.append({"Exact": [525, 680, 1, 3740]})
+    #idealSizes.append({"Exact": [500, 710, 1, 3740]})
+    #idealSizes.append({"Exact": [525, 710, 1, 3740]})
   return ProblemSizes(problemType, idealSizes)
 
 ################################################################################

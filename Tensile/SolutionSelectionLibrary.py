@@ -122,7 +122,7 @@ def analyzeSolutionSelectionOldClient( problemType, problemSizeGroups):
 
     for row in csvData:
       if rowIdx == 0:
-        print(rowIdx)
+        #print(rowIdx)
         summationKeys = getSummationKeys(row)
       else:
         if len(row) > 1:
@@ -227,7 +227,7 @@ def analyzeSolutionSelection(problemType, selectionFileNameList, numSolutionsPer
 
   return validSolutions
 
-def analyzeSolutionSelectionForMetric(problemType, selectionFileNameList, numSolutionsPerGroup, solutionGroupMap, solutionsList):
+def analyzeSolutionSelectionForMetric(problemType, selectionFileNameList, numSolutionsPerGroup, solutionGroupMap, solutionsList, vSolutionsList):
 
   performanceMap = {}
   solutionsHash = {}
@@ -337,23 +337,28 @@ def analyzeSolutionSelectionForMetric(problemType, selectionFileNameList, numSol
   #validSolutions = []
   #validSolutionSet = set([])
 
-  for key in performanceMap:
+  #for key in performanceMap:
 
-    print ("int Construction loop: %s" % key)
+  #for solutionKey in solutionsHash:
+  for solutionKey in  vSolutionsList:
+
+    #print ("int Construction loop: %s" % key)
   #for key in bestSolutionMap:
     #validSolution, _ = performanceMap[key]
-    validSolution, _, validSize = performanceMap[key]
+    ## validSolution, _, validSize = performanceMap[key]
+    ##dataMap = solutionsHash[validSolution]
     #validSize, validSolution, _ = bestSolutionMap[key]
-    dataMap = solutionsHash[validSolution]
+    dataMap = solutionsHash[solutionKey]
     #validSize = keySizeMap[key]
-    macroTile0 = validSolution["MacroTile0"]
-    macroTile1 = validSolution["MacroTile1"]
-    globalSplitU = validSolution["GlobalSplitU"]
-    localSplitU = validSolution["WorkGroup"][2]
-    validRep = (validSize[0],validSize[1], validSize[2], validSize[3], macroTile0, macroTile1, globalSplitU, localSplitU)
+    #macroTile0 = validSolution["MacroTile0"]
+    #macroTile1 = validSolution["MacroTile1"]
+    #globalSplitU = validSolution["GlobalSplitU"]
+    #localSplitU = validSolution["WorkGroup"][2]
+    #validRep = (validSize[0],validSize[1], validSize[2], validSize[3], macroTile0, macroTile1, globalSplitU, localSplitU)
     #validParams = (macroTile0, macroTile1, globalSplitU, localSplitU)
     #validSolutions.append((validSolution, dataMap, validSize, validParams))
-    validSolutions.append((validSolution, dataMap, validRep))
+    #validSolutions.append((validSolution, dataMap, validRep))
+    validSolutions.append((solutionKey, dataMap))
   #  #validSolutionSet.add(solution)
 
   #for validSolution in validSolutionSet:
