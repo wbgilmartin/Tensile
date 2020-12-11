@@ -136,6 +136,13 @@ globalParameters["CSVMergeSameProblemID"] = False
 # trig_float initializes with the sin function to have non-zero values in the mantissa
 # and exponent. It cannot be used for int8 or int32. Need to use tensileAlmostEqual
 # not tensileEqual for checking the result.
+# NOTE- the following comments explaining the DataInitType are for OldClient and should be obsolete.
+#       For NewClient, please read ClientWriter.py, the DataInitName(Enum)
+#       - Problem-Independent: 0=0, 1=1, 2=2, 3=rand, 4=Nan, 5=Infinity, 6=BadInput(Nan), 7=BadOutput(Inf), 16=RandomNarrow
+#       - Problem-dependent: 8=SerialID, 9=SerialDim0, 10=SerialDim1, 11=Identity, 12~15= Cos/Sin, Abs or Not
+#       For A, B, C, D: All the InitMode (0~16) can be used
+#       For Alpha/Beta: Only problem-independent init (0~7, 16) can be used,
+#                       problem-dependent init (8~15) would cause a exception (Invalid InitMode) in New Client
 globalParameters["DataInitTypeAB"] = 3            # 0=0, 1=1, 2=serial, 3=rand, 4=NaN, 5=serial-in-u, 6=trig_float.  Can be overridden by the DataInitTypeA or DataInitTypeB.  Eventually DataInitTypeAB will be retired.
 globalParameters["DataInitTypeA"] = -1            # 0=0, 1=1, 2=serial, 3=rand, 4=NaN, 5=serial-in-u, 6=trig_float.  -1 uses value from DataInitTypeAB
 globalParameters["DataInitTypeB"] = -1            # 0=0, 1=1, 2=serial, 3=rand, 4=NaN, 5=serial-in-u, 6=trig_float.  -1 uses value from DataInitTypeAB
@@ -143,6 +150,7 @@ globalParameters["DataInitTypeC"]  = 3            # 0=0, 1=1, 2=serial, 3=rand, 
 globalParameters["DataInitTypeD"]  = 0            # 0=0, 1=1, 2=serial, 3=rand, 4=Na, 5=serial-in-uN, 6=trig_float.
 globalParameters["DataInitTypeAlpha"] = 2         # 0=0, 1=1, 2=2, 3=rand, 4=NaN
 globalParameters["DataInitTypeBeta"] = 2          # 0=0, 1=1, 2=2, 3=rand, 4=NaN
+
 globalParameters["CEqualD"] = True               # Set to true if testing for the case where the pointer to C is the same as D.
 # build parameters
 globalParameters["CMakeCXXFlags"] = ""            # pass flags to cmake
@@ -180,8 +188,9 @@ globalParameters["MaxLDS"] = 65536                # max LDS a kernel should atte
 globalParameters["MaxDepthU"] = 256               # max DepthU value to allow
 globalParameters["ShortNames"] = False            # on windows kernel names can get too long; =True will convert solution/kernel names to serial ids
 globalParameters["MergeFiles"] = True             # F=store every solution and kernel in separate file; T=store all solutions in single file
-globalParameters["MaxFileName"] = 128 # If a file name would be longer than this, shorten it with a hash.
+globalParameters["MaxFileName"] = 128             # If a file name would be longer than this, shorten it with a hash.
 globalParameters["SupportedISA"] = [(8,0,3), (9,0,0), (9,0,6), (9,0,8), (10,1,0), (10,1,1)]             # assembly kernels writer supports these architectures
+globalParameters["GenerateManifestAndExit"] = False               # Output manifest file with list of expected library objects and exit
 globalParameters["ClientBuildPath"] = "0_Build"                   # subdirectory for host code build directory.
 globalParameters["NewClient"] = 2                                 # 1=Run old+new client, 2=run new client only (All In)
 globalParameters["BenchmarkProblemsPath"] = "1_BenchmarkProblems" # subdirectory for benchmarking phases
@@ -229,6 +238,9 @@ globalParameters["PerfModelReadEfficiency"] = 0.85
 # limitation for training
 globalParameters["MaxWorkspaceSize"] = 32 * 1024 * 1024 # max workspace for training (32M)
 globalParameters["MinKForGSU"] = 256 # min K size to use GlobalSplitU algorithm (only for HPA now)
+
+# control if a solution is run for a given problem
+globalParameters["GranularityThreshold"] = 0.0
 
 # Save a copy - since pytest doesn't re-run this initialization code and YAML files can override global settings - odd things can happen
 defaultGlobalParameters = deepcopy(globalParameters)
@@ -726,7 +738,8 @@ validParameters = {
     # 0:   Disable StoreRemap (default)
     # 1~8: Enable StoreRemap and set the global write vector width
     # Suggest optimum value: fp32 = [2,4], fp16 or bf16 = [4,8] (dwordx2 and dowrdx4)
-    "StoreRemapVectorWidth":      [0,1,2,4,8],
+    # -1:  Use dwordx2 if support SRVW, or set SRVW to 0
+    "StoreRemapVectorWidth":      [-1,0,1,2,4,8],
 
     # Disable overlapping AB-tile vgpr and read/write addr vgprs with C-tile vgprs
     # Valid only for MatrixInstruction enabled kernels, which by default overlaps
@@ -832,7 +845,7 @@ validParameters = {
     # If the ThreadTile is > VectorWidth then thread0 will next operate on the 4 elements in C at (4*NumThreads)
     # Typically the load vector width and store vector width are directly related to the VW.
     # The global load width is closely related to the width of local stores so
-    # GlobalReadVectorWidth also ontrols local write width.
+    # GlobalReadVectorWidth also controls local write width.
     # Local read width also matches since VectorWidth consec elements must be read
     # Typically matching 16 bytes is good choice since the stores will be optimally coalesced with 16 bytes/WI.
     # -1 means use the largest vector width up to 128 bits.
@@ -876,12 +889,24 @@ validParameters = {
     # -3 : Only allow min(GLVWA,GLVWB) < VW ?
     "DepthU":                     depthUs,
 
+    # DepthULdsDivisor determines how we pipeline the data from global memory to LDS
+    # Instead of moving all in-flight data from the register buffer (G2L) to the LDS at once, we divide the G2L buffer into N portions and
+    # write each portion of the G2L to LDS, read from LDS and do the actual matrix multiply-accumulate, before moving on to the portion and so on.
+    # This helps cut down LDS usage by the value of the divisor. Helps increase CU occupancy or DepthU if kernel was previously LDS limited.
+    #
+    # The premise of this parameter is to be able to fetch all 256B (equivalent to 128 half's or 64 single's) in a TN laid-out problem size,
+    # maximizing L2 channel efficiency, therefore this parameter only works for TN buffer layout
+    #
+    # Implementation-wise, for now it only supports ScheduleIterAlg=3 and TransposeLDS=1
+    # In addition, it does not work with DirectToLds=1 because it needs the in-flight data to reside in registers
+    "DepthULdsDivisor":           [1, 2], # [4, 8] not tested yet
+
     # integer ammount of padding to put into LDS, in 2016 this didn't seem to help performance, profilers were showing that channel conflicts weren't really hurting
     # performance so this has been deprecated and probably doesn't work
     # -1 means use same padding as the VectorWidth if TLU=0 else 0.  (Padding only helps when transpose is required)
     # With MatrixInstruciton: -1 means max(GRVW,MIInput) if TLU=0
-    "LdsPadA":                     [ -1, 0, 1, 2, 3, 4, 8],
-    "LdsPadB":                     [ -1, 0, 1, 2, 3, 4, 8],
+    "LdsPadA":                     [ -1, 0, 1, 2, 3, 4, 8, 16],
+    "LdsPadB":                     [ -1, 0, 1, 2, 3, 4, 8, 16],
 
     # Padding boundary for LDS. defines block-size for pad insertion. for every 'LdsBlockSizePerPad' bytes, LDS padding (pad value from LdsPad parameter)
     # is added (readOffset aware of the pad and adjusts offset value based on this parameter value).
@@ -1038,6 +1063,7 @@ defaultBenchmarkCommonParameters = [
     {"DisableAtomicFail":         [ 0 ] },
     {"DisableKernelPieces":       [ 0 ] },
     {"DepthU":                    [ -1 ] },
+    {"DepthULdsDivisor":          [ 1 ] },
     {"PerformanceSyncLocation":   [ -1 ] },
     {"PerformanceWaitLocation":   [ -1 ] },
     {"PerformanceWaitCount":      [ -1 ] },
@@ -1245,6 +1271,10 @@ defaultProblemType = {
     "ZeroPadA":                 [], # [ [0,1, 2,3]]
     "ZeroPadB":                 [], # Not fully supported/tested yet
 
+    # Summation dimension indices
+    "MirrorDimsA":              [],
+    "MirrorDimsB":              [],
+
     # for LD description
     "NumIndicesLD":            4,
     "IndexAssignmentsLD":       [3, 4, 5, 6],      # order is LDD, LDC, LDA, LDB
@@ -1347,20 +1377,20 @@ def printExit(message):
 
 ################################################################################
 # Locate Executables
-# rocm-smi, hip-clang, rocm_agent_enumerator
+# rocm-smi, hip-clang, rocm_agent_enumerator, clang-offload-bundler
 ################################################################################
 def isExe( filePath ):
   return os.path.isfile(filePath) and os.access(filePath, os.X_OK)
 def locateExe( defaultPath, exeName ): # /opt/rocm/bin, hip-clang
-  # look in path first
+  # look in defaultPath first
+  exePath = os.path.join(defaultPath, exeName)
+  if isExe(exePath):
+    return exePath
+  # look in PATH second
   for path in os.environ["PATH"].split(os.pathsep):
     exePath = os.path.join(path, exeName)
     if isExe(exePath):
       return exePath
-  # look in default path second
-  exePath = os.path.join(defaultPath, exeName)
-  if isExe(exePath):
-    return exePath
   return None
 
 def GetAsmCaps(isaVersion):

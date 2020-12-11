@@ -8,7 +8,7 @@ function extract_sizes() {
   local EXTRACT_SIZE_PATH=`pwd`
   popd > /dev/null
 
-  EXTRACT_EXE="python ${AUTOMATION_ROOT}/GenerateTuningConfigurations.py ${SIZE_LOG} ${EXTRACT_SIZE_PATH} ${OUTPUT_FILE} ${LIBRARY} ${TILE_AWARE} ${MFMA} ${RK} ${DISABLE_STRIDES} ${PROBLEM_DEFINITION}  ${INITIALIZATION} ${TENSILE_CLIENT} ${DISABLE_HPA}"
+  EXTRACT_EXE="python3 ${AUTOMATION_ROOT}/GenerateTuningConfigurations.py ${SIZE_LOG} ${EXTRACT_SIZE_PATH} ${OUTPUT_FILE} ${LIBRARY} ${TILE_AWARE} ${MFMA} ${RK} ${DISABLE_STRIDES} ${PROBLEM_DEFINITION}  ${INITIALIZATION} ${TENSILE_CLIENT} ${DISABLE_HPA}"
 
   ${EXTRACT_EXE}
 
@@ -23,7 +23,7 @@ function extract_network_sizes() {
   local EXTRACT_SIZE_PATH=`pwd`
   popd > /dev/null
 
-  EXTRACT_EXE="python ${AUTOMATION_ROOT}/GenerateTuningConfigurations.py ${SIZE_DIR} ${NETWORK} ${EXTRACT_SIZE_PATH} ${OUTPUT_FILE} ${LIBRARY} ${TILE_AWARE} ${MFMA} ${RK} ${DISABLE_STRIDES} ${PROBLEM_DEFINITION} ${INITIALIZATION} ${TENSILE_CLIENT} ${DISABLE_HPA}"
+  EXTRACT_EXE="python3 ${AUTOMATION_ROOT}/GenerateTuningConfigurations.py ${SIZE_DIR} ${NETWORK} ${EXTRACT_SIZE_PATH} ${OUTPUT_FILE} ${LIBRARY} ${TILE_AWARE} ${MFMA} ${RK} ${DISABLE_STRIDES} ${PROBLEM_DEFINITION} ${INITIALIZATION} ${TENSILE_CLIENT} ${DISABLE_HPA}"
 
   ${EXTRACT_EXE}
 
@@ -38,7 +38,7 @@ function build_configs() {
   local HEADER_FILE="${CONFIGURATION_ROOT}/boiler/header.yml"
   local GENERATE_CONFIGURATION="${AUTOMATION_ROOT}/GenerateTuningConfigurations.py"
 
-  BUILD_CONFIGS="python ${GENERATE_CONFIGURATION} -w ${WORKING_PATH} -d ${HEADER_FILE} -c ${CONFIGURATION_ROOT} -p ${PROBLEM_SPEC} -o ${OUTPUT_FILE}"
+  BUILD_CONFIGS="python3 ${GENERATE_CONFIGURATION} -w ${WORKING_PATH} -d ${HEADER_FILE} -c ${CONFIGURATION_ROOT} -p ${PROBLEM_SPEC} -o ${OUTPUT_FILE}"
   ${BUILD_CONFIGS}
 
 }
@@ -112,7 +112,6 @@ while true; do
     -b | --branch  )        TENSILE_BRANCH="$2"; shift 2;;
     -c | --commit )         COMMIT="$2"; shift 2;;
     -o | --output )         OUTPUT_FILE="$2"; shift 2;;
-    -y | --type )           CONFIGURATION_TYPE="$2"; shift 2;;
     -l | --library )        LIBRARY="$2"; shift 2;;
     -a | --tile-aware )     TILE_AWARE=true; shift;;
     -m | --mfma )           MFMA=true; shift;;
@@ -149,11 +148,6 @@ if [ -z ${OUTPUT_FILE+foo} ]; then
 fi
 if [ -z ${LIBRARY+foo} ]; then
    printf "Need specify a target platform for tuning\n"
-   exit 2
-fi
-
-if [ -z ${CONFIGURATION_TYPE+foo} ]; then
-   printf "Need specify a configuration type\n"
    exit 2
 fi
 
